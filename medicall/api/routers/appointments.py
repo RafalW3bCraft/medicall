@@ -1,30 +1,25 @@
 """
 Appointments router.
 
-POST /appointments  — create an appointment and trigger coordination workflow
+POST /appointments      — create an appointment and run coordination workflow
 GET  /appointments/{id} — get workflow status and result
 """
 
 from __future__ import annotations
 
 import os
-from typing import Annotated
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from medicall.api import store as app_store
 from medicall.calle.mock_adapter import MockCallEAdapter
 from medicall.calle.real_adapter import RealCallEAdapter
-from medicall.core.events import InMemoryEventStore
-from medicall.core.models import Appointment, AppointmentSlot, WorkflowRecord
+from medicall.core.models import Appointment, AppointmentSlot
 from medicall.engine.coordinator import CoordinationEngine
+from medicall.engine.handoff import HandoffGenerator
 
 router = APIRouter()
-
-# Shared in-memory store (replace with DB-backed store for production)
-_event_store = InMemoryEventStore()
-_workflows: dict[str, WorkflowRecord] = {}
-_appointments: dict[str, Appointment] = {}
 
 
 def _get_phone_port():
@@ -60,17 +55,19 @@ class WorkflowStatusResponse(BaseModel):
 
 @router.post("/", response_model=WorkflowStatusResponse, status_code=201)
 async def create_appointment(body: AppointmentRequest) -> WorkflowStatusResponse:
-    """Create an appointment record and immediately run the coordination workflow."""
+    """Create an appointment and immediately run the coordination workflow."""
     appointment = Appointment(**body.model_dump())
-    _appointments[appointment.id] = appointment
+    app_store.appointments[appointment.id] = appointment
 
     engine = CoordinationEngine(
         phone_port=_get_phone_port(),
-        event_store=_event_store,
+        event_store=app_store.event_store,
+        # Wire HandoffGenerator to the shared handoffs store
+        handoff_generator=HandoffGenerator(store=app_store.handoffs),
     )
 
     record = await engine.run(appointment)
-    _workflows[record.id] = record
+    app_store.workflows[record.id] = record
 
     return _to_response(appointment.id, record)
 
@@ -79,7 +76,7 @@ async def create_appointment(body: AppointmentRequest) -> WorkflowStatusResponse
 async def get_appointment_status(appointment_id: str) -> WorkflowStatusResponse:
     """Get the latest workflow status for an appointment."""
     record = next(
-        (r for r in _workflows.values() if r.appointment_id == appointment_id),
+        (r for r in app_store.workflows.values() if r.appointment_id == appointment_id),
         None,
     )
     if not record:
@@ -87,7 +84,7 @@ async def get_appointment_status(appointment_id: str) -> WorkflowStatusResponse:
     return _to_response(appointment_id, record)
 
 
-def _to_response(appointment_id: str, record: WorkflowRecord) -> WorkflowStatusResponse:
+def _to_response(appointment_id: str, record) -> WorkflowStatusResponse:
     decision = record.policy_decision
     return WorkflowStatusResponse(
         appointment_id=appointment_id,

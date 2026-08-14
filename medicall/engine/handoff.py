@@ -12,7 +12,15 @@ from medicall.core.models import Appointment, Handoff, WorkflowRecord
 
 
 class HandoffGenerator:
-    """Generates a Handoff from a completed WorkflowRecord."""
+    """
+    Generates a Handoff from a completed WorkflowRecord.
+
+    Pass a `store` dict (handoff_id → Handoff) to persist generated
+    handoffs so they can be retrieved by the /handoffs API router.
+    """
+
+    def __init__(self, store: dict[str, Handoff] | None = None) -> None:
+        self._store = store  # optional shared dict for persistence
 
     def generate(self, appointment: Appointment, record: WorkflowRecord) -> Handoff:
         """Build a Handoff for staff review."""
@@ -33,7 +41,7 @@ class HandoffGenerator:
         disposition = decision.disposition if decision else "HUMAN_REVIEW"
         workflow_action = decision.workflow_action if decision else "route_to_nurse_queue"
 
-        return Handoff(
+        handoff = Handoff(
             appointment_id=appointment.id,
             workflow_id=record.id,
             patient_name=appointment.patient_name,
@@ -46,3 +54,6 @@ class HandoffGenerator:
             transcript_excerpt=transcript_excerpt,
             requires_acknowledgment=(disposition in {"HUMAN_REVIEW", "ESCALATION"}),
         )
+        if self._store is not None:
+            self._store[handoff.id] = handoff
+        return handoff
