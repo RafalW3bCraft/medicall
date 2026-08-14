@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Environment / secrets — NEVER commit
+.env
+*.env.local
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

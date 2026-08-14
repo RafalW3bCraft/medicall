@@ -1,13 +1,14 @@
 """
 RealCallEAdapter — wraps the calle-ai v0.6 Python SDK.
 
-The calle-ai v0.6 SDK uses a direct REST API:
-  - CalleClient(api_key=<token>) — bearer token from the CLI cache
-  - client.calls.create_and_wait(task=..., recipient=..., idempotency_key=...)
-  - Returns a dict with call status, result, transcript, evidence
+Authentication priority (highest → lowest):
+  1. CALLE_API_KEY environment variable (explicit key, ideal for CI/Docker)
+  2. CLI token cache (auto-discovered from ~/.calle-mcp/cli/*/token.json)
+     — populated automatically when `calle auth login` has been run
 
-Token is read from the same cache the `calle` CLI uses:
-  ~/.calle-mcp/cli/<hash>/token.json  →  {"token": "<bearer>", ...}
+Token cache discovery is automatic: the adapter scans the default cache
+directory and picks the most recently issued valid token file. No hardcoded
+path hash is required.
 
 Only used when USE_MOCK_CALLE=false. All development and unit/integration
 tests must use MockCallEAdapter to avoid burning call credits.
@@ -19,153 +20,136 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
 from pathlib import Path
 
 from medicall.core.models import CallResult, CallTask, IntakeResult, PatientReport
-from medicall.core.state_machine import CALLE_TERMINAL_STATUSES
 
 logger = logging.getLogger(__name__)
 
 CALL_TIMEOUT_SECONDS = float(os.getenv("CALL_TIMEOUT_SECONDS", "300"))
 POLL_INTERVAL_SECONDS = float(os.getenv("POLL_INTERVAL_SECONDS", "2"))
 
-# Default CLI token cache root
 _DEFAULT_CACHE_ROOT = Path.home() / ".calle-mcp" / "cli"
-# The hash subdirectory is fixed for the default channel
-_DEFAULT_CACHE_HASH = "4811f3e50259ff50339bb2feef40c0e9"
 
 
-def _read_token_from_cache(
-    cache_root: Path | None = None,
-    cache_hash: str | None = None,
-) -> str:
+def _resolve_api_key() -> str:
     """
-    Read the bearer token from the CALL-E CLI token cache.
+    Resolve the CALL-E API key using the authentication priority chain.
 
-    The CLI stores the token at:
-      ~/.calle-mcp/cli/<hash>/token.json  →  {"token": "...", "expires_at": "..."}
+    Priority:
+      1. CALLE_API_KEY env var (explicit, for CI/Docker)
+      2. CLI token cache — scanned from CALLE_CACHE_ROOT or ~/.calle-mcp/cli/
 
-    Raises RuntimeError if the token is not found or the file does not exist.
+    Raises RuntimeError if no usable credential is found.
     """
-    root = cache_root or Path(os.getenv("CALLE_CACHE_ROOT", str(_DEFAULT_CACHE_ROOT)))
-    hash_dir = cache_hash or os.getenv("CALLE_CACHE_HASH", _DEFAULT_CACHE_HASH)
-    token_path = root / hash_dir / "token.json"
+    # Priority 1 — explicit env var
+    api_key = os.getenv("CALLE_API_KEY", "").strip()
+    if api_key:
+        logger.debug("Using CALLE_API_KEY from environment")
+        return api_key
 
-    if not token_path.exists():
+    # Priority 2 — CLI token cache
+    return _read_token_from_cache()
+
+
+def _read_token_from_cache() -> str:
+    """
+    Auto-discover and read the access token from the CALL-E CLI token cache.
+
+    Scans CALLE_CACHE_ROOT (default: ~/.calle-mcp/cli/) for token.json files
+    and returns the access_token from the most recently issued valid one.
+
+    Raises RuntimeError if no usable token is found.
+    """
+    cache_root_env = os.getenv("CALLE_CACHE_ROOT", "").strip()
+    cache_root = Path(cache_root_env) if cache_root_env else _DEFAULT_CACHE_ROOT
+
+    if not cache_root.exists():
         raise RuntimeError(
-            f"CALL-E token cache not found at {token_path}. "
-            "Run `calle auth login` to authenticate."
+            f"CALL-E token cache directory not found: {cache_root}\n"
+            "Run `calle auth login` to authenticate, or set CALLE_API_KEY."
         )
 
-    data = json.loads(token_path.read_text())
-    token_field = data.get("token")
-    if not token_field:
+    # Scan all subdirectories for token.json files
+    token_files = sorted(cache_root.glob("*/token.json"))
+    if not token_files:
         raise RuntimeError(
-            f"CALL-E token cache at {token_path} does not contain a 'token' field. "
-            "Run `calle auth login` to re-authenticate."
+            f"No token.json found under {cache_root}\n"
+            "Run `calle auth login` to authenticate, or set CALLE_API_KEY."
         )
-    # token is a nested object: {"access_token": "...", "token_type": "Bearer", ...}
-    if isinstance(token_field, dict):
-        access_token = token_field.get("access_token")
-        if not access_token:
-            raise RuntimeError(
-                f"CALL-E token cache at {token_path}: 'token.access_token' is missing. "
-                "Run `calle auth login` to re-authenticate."
-            )
-        return access_token
-    # Fallback: token is a bare string
-    return str(token_field)
+
+    # Try each token file, pick the first with a valid access_token
+    errors: list[str] = []
+    for token_path in token_files:
+        try:
+            data = json.loads(token_path.read_text())
+            token_field = data.get("token")
+            if not token_field:
+                errors.append(f"{token_path}: missing 'token' field")
+                continue
+            if isinstance(token_field, dict):
+                access_token = token_field.get("access_token", "").strip()
+                if access_token:
+                    logger.debug("Using token from cache: %s", token_path)
+                    return access_token
+                errors.append(f"{token_path}: 'token.access_token' is empty")
+            elif isinstance(token_field, str) and token_field.strip():
+                logger.debug("Using token (string) from cache: %s", token_path)
+                return token_field.strip()
+            else:
+                errors.append(f"{token_path}: unrecognised token format")
+        except (json.JSONDecodeError, OSError) as exc:
+            errors.append(f"{token_path}: {exc}")
+
+    raise RuntimeError(
+        "No usable CALL-E token found in cache.\n"
+        "Run `calle auth login` to authenticate, or set CALLE_API_KEY.\n"
+        "Details:\n" + "\n".join(f"  {e}" for e in errors)
+    )
 
 
 class RealCallEAdapter:
     """
     Production CALL-E adapter using the calle-ai v0.6 Python SDK.
 
-    Uses calls.create_and_wait() with a bearer token read directly from
-    the CLI token cache. No separate API key configuration needed as long
-    as `calle auth login` has been run successfully.
+    Resolves credentials automatically — no hardcoded paths or keys.
+    See _resolve_api_key() for the authentication priority chain.
     """
-
-    def __init__(
-        self,
-        cache_root: Path | None = None,
-        cache_hash: str | None = None,
-    ) -> None:
-        self._cache_root = cache_root
-        self._cache_hash = cache_hash
 
     async def execute(self, task: CallTask) -> CallResult:
         """
         Run a CALL-E call using the v0.6 SDK.
 
-        calls.create_and_wait(task, recipient, idempotency_key)
+        calls.create_and_wait(task, recipient, result_schema, idempotency_key)
         → polls internally until terminal status
-        → returns final call dict
+        → returns parsed CallResult
         """
         try:
             from calle import CalleClient  # type: ignore[import]
-        except ImportError as e:
+        except ImportError as exc:
             raise RuntimeError(
-                "calle-ai is not installed. Run: .venv/bin/pip install calle-ai"
-            ) from e
+                "calle-ai is not installed. "
+                "Activate the venv and run: pip install calle-ai"
+            ) from exc
 
-        token = _read_token_from_cache(self._cache_root, self._cache_hash)
-        client = CalleClient(api_key=token)
+        api_key = _resolve_api_key()
+        client = CalleClient(api_key=api_key)
 
         logger.info(
-            "Starting CALL-E call for appointment=%s attempt=%d",
+            "Starting CALL-E call | appointment=%s attempt=%d",
             task.appointment_id,
             task.attempt_number,
         )
 
-        # Build the recipient dict — E.164 phone number
         recipient = {"phone": task.phone}
+        result_schema = _build_result_schema()
 
-        # Build a result schema that maps to our IntakeResult fields
-        result_schema = {
-            "appointment_confirmed": {
-                "type": "boolean",
-                "description": "Whether the patient confirmed they will attend.",
-            },
-            "reschedule_requested": {
-                "type": "boolean",
-                "description": "Whether the patient asked to reschedule.",
-            },
-            "rescheduled_date": {
-                "type": "string",
-                "description": "New date chosen if rescheduling (ISO date or null).",
-                "nullable": True,
-            },
-            "rescheduled_time": {
-                "type": "string",
-                "description": "New time chosen if rescheduling (HH:MM or null).",
-                "nullable": True,
-            },
-            "patient_reports": {
-                "type": "array",
-                "description": (
-                    "Patient-reported changes since booking. "
-                    "Record verbatim statements only — no clinical interpretation."
-                ),
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "patient_statement": {"type": "string"},
-                        "normalized_description": {"type": "string"},
-                    },
-                },
-            },
-            "consent_given": {
-                "type": "boolean",
-                "description": "Whether the patient consented to information collection.",
-            },
-        }
+        logger.info(
+            "Submitting to CALL-E | idempotency_key=%s",
+            task.idempotency_key,
+        )
 
-        logger.info("Submitting call to CALL-E API (idempotency_key=%s)", task.idempotency_key)
-
-        # Run synchronously in a thread to avoid blocking the event loop
-        raw = await asyncio.to_thread(
+        raw: dict = await asyncio.to_thread(
             client.calls.create_and_wait,
             task=task.goal,
             recipient=recipient,
@@ -176,73 +160,125 @@ class RealCallEAdapter:
         )
 
         logger.info(
-            "CALL-E call complete: call_id=%s status=%s",
+            "CALL-E call complete | call_id=%s status=%s",
             raw.get("id"),
             raw.get("status"),
         )
 
-        return self._parse_result(raw)
+        return _parse_result(raw)
 
-    def _parse_result(self, raw: dict) -> CallResult:
-        """Parse the calle-ai v0.6 call dict into a MediCall CallResult."""
-        status = raw.get("status", "FAILED").upper()
 
-        # Map calle-ai v0.6 statuses to CALL-E terminal status set
-        # v0.6 uses: completed, failed, no_answer, busy, cancelled
-        status_map = {
-            "COMPLETED": "COMPLETED",
-            "FAILED": "FAILED",
-            "NO_ANSWER": "NO_ANSWER",
-            "BUSY": "BUSY",
-            "CANCELLED": "CANCELLED",
-            "CANCELED": "CANCELED",
-            "VOICEMAIL": "VOICEMAIL",
-        }
-        calle_status = status_map.get(status, status)
+# ── Result schema ──────────────────────────────────────────────────────────────
 
-        # Extract result fields
-        result = raw.get("result") or {}
-        transcript = raw.get("transcript") or result.get("transcript")
-        call_id = str(raw.get("id", "")) or None
+def _build_result_schema() -> dict:
+    """
+    Build the structured result schema passed to CALL-E.
 
-        # Parse intake from result schema output
-        intake = self._parse_intake(result, calle_status)
+    Maps to IntakeResult fields. CALL-E fills this from the conversation.
+    No clinical fields — only patient-reported operational data.
+    """
+    return {
+        "appointment_confirmed": {
+            "type": "boolean",
+            "description": "Whether the patient confirmed they will attend.",
+        },
+        "reschedule_requested": {
+            "type": "boolean",
+            "description": "Whether the patient asked to reschedule.",
+        },
+        "rescheduled_date": {
+            "type": "string",
+            "description": "New date if rescheduling requested (ISO date, e.g. 2026-09-01).",
+            "nullable": True,
+        },
+        "rescheduled_time": {
+            "type": "string",
+            "description": "New time if rescheduling requested (HH:MM, e.g. 14:30).",
+            "nullable": True,
+        },
+        "patient_reports": {
+            "type": "array",
+            "description": (
+                "Patient-reported changes since booking. "
+                "Record verbatim patient statements only. "
+                "No clinical interpretation, no diagnosis, no medical advice."
+            ),
+            "items": {
+                "type": "object",
+                "properties": {
+                    "patient_statement": {
+                        "type": "string",
+                        "description": "Exact words used by the patient.",
+                    },
+                    "normalized_description": {
+                        "type": "string",
+                        "description": "Neutral plain-language restatement.",
+                    },
+                },
+            },
+        },
+        "consent_given": {
+            "type": "boolean",
+            "description": "Whether the patient agreed to the information collection.",
+        },
+    }
 
-        return CallResult(
-            run_id=call_id or "unknown",
-            calle_status=calle_status,
-            intake=intake,
-            transcript=transcript,
-            evidence=[],
-            call_id=call_id,
-            raw_calle_response=raw,
-        )
 
-    def _parse_intake(self, result: dict, calle_status: str) -> IntakeResult | None:
-        """Parse the structured result dict into an IntakeResult."""
-        if calle_status not in {"COMPLETED"}:
-            return None
-        if not result:
-            return None
+# ── Result parsing ─────────────────────────────────────────────────────────────
 
-        try:
-            reports_raw = result.get("patient_reports") or []
-            reports = [
-                PatientReport(
-                    patient_statement=r.get("patient_statement", ""),
-                    normalized_description=r.get("normalized_description", ""),
-                )
-                for r in reports_raw
-                if isinstance(r, dict) and r.get("patient_statement")
-            ]
-            return IntakeResult(
-                appointment_confirmed=bool(result.get("appointment_confirmed", False)),
-                reschedule_requested=bool(result.get("reschedule_requested", False)),
-                rescheduled_to=None,  # detailed slot parsing can be added later
-                patient_reports=reports,
-                consent_given=bool(result.get("consent_given", True)),
-                call_completed=True,
+def _parse_result(raw: dict) -> CallResult:
+    """Parse a calle-ai v0.6 call response dict into a MediCall CallResult."""
+    status = raw.get("status", "FAILED").upper()
+
+    _STATUS_MAP = {
+        "COMPLETED": "COMPLETED",
+        "FAILED": "FAILED",
+        "NO_ANSWER": "NO_ANSWER",
+        "BUSY": "BUSY",
+        "CANCELLED": "CANCELLED",
+        "CANCELED": "CANCELED",
+        "VOICEMAIL": "VOICEMAIL",
+    }
+    calle_status = _STATUS_MAP.get(status, status)
+
+    result: dict = raw.get("result") or {}
+    transcript: str | None = raw.get("transcript") or result.get("transcript")
+    call_id: str | None = str(raw["id"]) if raw.get("id") else None
+
+    intake = _parse_intake(result, calle_status)
+
+    return CallResult(
+        run_id=call_id or "unknown",
+        calle_status=calle_status,
+        intake=intake,
+        transcript=transcript,
+        evidence=[],
+        call_id=call_id,
+        raw_calle_response=raw,
+    )
+
+
+def _parse_intake(result: dict, calle_status: str) -> IntakeResult | None:
+    """Parse the structured result dict into an IntakeResult."""
+    if calle_status != "COMPLETED" or not result:
+        return None
+    try:
+        reports = [
+            PatientReport(
+                patient_statement=r.get("patient_statement", ""),
+                normalized_description=r.get("normalized_description", ""),
             )
-        except Exception as exc:
-            logger.warning("Could not parse CALL-E intake result: %s", exc)
-            return None
+            for r in (result.get("patient_reports") or [])
+            if isinstance(r, dict) and r.get("patient_statement")
+        ]
+        return IntakeResult(
+            appointment_confirmed=bool(result.get("appointment_confirmed", False)),
+            reschedule_requested=bool(result.get("reschedule_requested", False)),
+            rescheduled_to=None,
+            patient_reports=reports,
+            consent_given=bool(result.get("consent_given", True)),
+            call_completed=True,
+        )
+    except Exception as exc:
+        logger.warning("Could not parse CALL-E intake result: %s", exc)
+        return None
