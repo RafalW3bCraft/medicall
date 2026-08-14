@@ -1,0 +1,29 @@
+[
+  {
+    "patient_name": "Jane Smith",
+    "patient_phone": "+15551110001",
+    "clinic_name": "City Medical Centre",
+    "appointment_date": "2026-08-17",
+    "appointment_time": "10:00",
+    "language": "English",
+    "region": "US",
+    "alternative_slots": [
+      {"date": "2026-08-20", "time": "09:00", "label": "Thursday 20 Aug at 9:00 AM"},
+      {"date": "2026-08-20", "time": "14:30", "label": "Thursday 20 Aug at 2:30 PM"}
+    ],
+    "max_retry_attempts": 3
+  },
+  {
+    "patient_name": "John Doe",
+    "patient_phone": "+15551110002",
+    "clinic_name": "City Medical Centre",
+    "appointment_date": "2026-08-17",
+    "appointment_time": "11:00",
+    "language": "English",
+    "region": "US",
+    "alternative_slots": [
+      {"date": "2026-08-21", "time": "10:00", "label": "Friday 21 Aug at 10:00 AM"}
+    ],
+    "max_retry_attempts": 3
+  }
+]

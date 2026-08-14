@@ -1,0 +1,30 @@
+{
+  "run_id": "mock-run-005",
+  "calle_status": "COMPLETED",
+  "intake": {
+    "appointment_confirmed": true,
+    "reschedule_requested": false,
+    "rescheduled_to": null,
+    "patient_reports": [
+      {
+        "patient_statement": "I've been having chest pain since yesterday and it's been getting worse.",
+        "normalized_description": "chest pain, onset yesterday, trajectory worsening",
+        "source": "patient",
+        "call_offset_seconds": 42
+      }
+    ],
+    "consent_given": true,
+    "call_completed": true
+  },
+  "transcript": "Agent: Has anything changed since you booked?\nPatient: Actually yes. I've been having chest pain since yesterday and it's been getting worse.\nAgent: I can make sure the care team knows what you've told me. I'm not in a position to give medical advice. I've noted what you said for them.\nPatient: Okay, thank you.",
+  "evidence": [
+    {
+      "rule": "R03_new_symptom_reported",
+      "patient_statement": "I've been having chest pain since yesterday and it's been getting worse.",
+      "call_offset_seconds": 42
+    }
+  ],
+  "call_id": "call-mock-005",
+  "duration_seconds": 67,
+  "raw_calle_response": {}
+}

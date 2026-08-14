@@ -1,0 +1,24 @@
+{
+  "run_id": "mock-run-006",
+  "calle_status": "COMPLETED",
+  "intake": {
+    "appointment_confirmed": true,
+    "reschedule_requested": false,
+    "rescheduled_to": null,
+    "patient_reports": [
+      {
+        "patient_statement": "I've been feeling a bit off, not sure how to describe it.",
+        "normalized_description": "non-specific feeling unwell, patient unable to describe further",
+        "source": "patient",
+        "call_offset_seconds": 38
+      }
+    ],
+    "consent_given": true,
+    "call_completed": true
+  },
+  "transcript": "Agent: Has anything changed since you booked?\nPatient: I've been feeling a bit off, not sure how to describe it.\nAgent: I've noted that for the care team. Is there anything else you'd like them to know?",
+  "evidence": [],
+  "call_id": "call-mock-006",
+  "duration_seconds": 51,
+  "raw_calle_response": {}
+}

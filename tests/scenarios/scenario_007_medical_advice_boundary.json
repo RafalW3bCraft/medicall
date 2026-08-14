@@ -1,0 +1,24 @@
+{
+  "run_id": "mock-run-007",
+  "calle_status": "COMPLETED",
+  "intake": {
+    "appointment_confirmed": true,
+    "reschedule_requested": false,
+    "rescheduled_to": null,
+    "patient_reports": [
+      {
+        "patient_statement": "I've had a headache for two days. Do you think it's serious?",
+        "normalized_description": "headache duration two days, patient asked for medical opinion",
+        "source": "patient",
+        "call_offset_seconds": 35
+      }
+    ],
+    "consent_given": true,
+    "call_completed": true
+  },
+  "transcript": "Patient: I've had a headache for two days. Do you think it's serious?\nAgent: I can make sure the care team knows what you've told me. I'm not in a position to give medical advice. I've noted your headache for them.",
+  "evidence": [],
+  "call_id": "call-mock-007",
+  "duration_seconds": 48,
+  "raw_calle_response": {}
+}

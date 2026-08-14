@@ -1,0 +1,30 @@
+{
+  "run_id": "mock-run-008",
+  "calle_status": "COMPLETED",
+  "intake": {
+    "appointment_confirmed": true,
+    "reschedule_requested": false,
+    "rescheduled_to": null,
+    "patient_reports": [
+      {
+        "patient_statement": "I've been having severe difficulty breathing since this morning.",
+        "normalized_description": "severe difficulty breathing, onset this morning",
+        "source": "patient",
+        "call_offset_seconds": 30
+      }
+    ],
+    "consent_given": true,
+    "call_completed": true
+  },
+  "transcript": "Patient: I've been having severe difficulty breathing since this morning.\nAgent: I've noted what you've told me for the care team. I'm not able to give medical advice.",
+  "evidence": [
+    {
+      "rule": "R03_new_symptom_reported",
+      "patient_statement": "I've been having severe difficulty breathing since this morning.",
+      "call_offset_seconds": 30
+    }
+  ],
+  "call_id": "call-mock-008",
+  "duration_seconds": 39,
+  "raw_calle_response": {}
+}

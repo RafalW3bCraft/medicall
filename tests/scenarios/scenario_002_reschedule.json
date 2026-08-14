@@ -1,0 +1,21 @@
+{
+  "run_id": "mock-run-002",
+  "calle_status": "COMPLETED",
+  "intake": {
+    "appointment_confirmed": false,
+    "reschedule_requested": true,
+    "rescheduled_to": {
+      "date": "2026-08-20",
+      "time": "14:30",
+      "label": "Thursday 20 Aug at 2:30 PM"
+    },
+    "patient_reports": [],
+    "consent_given": true,
+    "call_completed": true
+  },
+  "transcript": "Agent: Hello, this is City Clinic calling for John Doe.\nPatient: Speaking.\nAgent: Hi John, calling about your appointment Monday 17 Aug at 10:00 AM. Are you still able to attend?\nPatient: Actually no, something came up at work.\nAgent: No problem. We have Thursday 20 Aug at 2:30 PM available. Would that work?\nPatient: Yes, that works perfectly.\nAgent: Great, I've noted that down. See you Thursday!",
+  "evidence": [],
+  "call_id": "call-mock-002",
+  "duration_seconds": 58,
+  "raw_calle_response": {}
+}
