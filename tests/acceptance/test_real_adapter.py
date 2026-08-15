@@ -1,20 +1,21 @@
 """
 Acceptance test for RealCallEAdapter.
 
-This test places a REAL outbound CALL-E phone call.
+This test places a REAL outbound CALL-E phone call via the `calle` CLI.
 It is SKIPPED by default and ONLY runs when both env vars are set:
 
     CALLE_ACCEPTANCE=1
     ACCEPTANCE_PHONE=+<your E.164 number>
 
 Run with:
-    CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+15551234567 \\
+    CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043 \\
         pytest tests/acceptance/test_real_adapter.py -v -s
 
 Requirements:
+    - `calle` CLI installed (npm install -g @call-e/cli)
     - `calle auth status` must report usable=true
     - You must have available CALL-E call credits
-    - The phone number must be your own — this places a real call
+    - The phone number must be your own — this places a real outbound call
 
 DO NOT run this in CI or automated pipelines.
 """
@@ -25,7 +26,7 @@ import os
 
 import pytest
 
-from medicall.calle.real_adapter import RealCallEAdapter
+from medicall.calle.real_adapter import RealCallEAdapter, _find_calle_binary
 from medicall.core.idempotency import derive_idempotency_key
 from medicall.core.models import CallTask
 from medicall.core.state_machine import CALLE_TERMINAL_STATUSES
@@ -45,16 +46,22 @@ pytestmark = pytest.mark.skipif(
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 
+def test_calle_binary_found() -> None:
+    """Verify the calle CLI is locatable before attempting a real call."""
+    cmd = _find_calle_binary()
+    assert cmd, "calle binary not found"
+    print(f"\n   calle binary: {' '.join(cmd)}")
+
+
 @pytest.mark.asyncio
 async def test_real_adapter_single_call() -> None:
     """
-    Places a single real CALL-E call to ACCEPTANCE_PHONE.
+    Places a single real CALL-E call to ACCEPTANCE_PHONE via calle CLI.
 
     Verifies:
-    1. plan_call → run_call → get_call_run loop completes without error
+    1. calle call start → calle call status poll loop completes
     2. The returned CallResult has a run_id and a terminal calle_status
     3. No forbidden clinical fields appear in any result field
-    4. The idempotency key was used (adapter does not raise on construction)
     """
     adapter = RealCallEAdapter()
 
