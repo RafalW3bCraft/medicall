@@ -1,28 +1,28 @@
 [
   {
     "patient_name": "Jane Smith",
-    "patient_phone": "+15551110001",
+    "patient_phone": "+<E.164-phone-number>",
     "clinic_name": "City Medical Centre",
-    "appointment_date": "2026-08-17",
+    "appointment_date": "2026-09-01",
     "appointment_time": "10:00",
     "language": "English",
-    "region": "US",
+    "region": "IN",
     "alternative_slots": [
-      {"date": "2026-08-20", "time": "09:00", "label": "Thursday 20 Aug at 9:00 AM"},
-      {"date": "2026-08-20", "time": "14:30", "label": "Thursday 20 Aug at 2:30 PM"}
+      {"date": "2026-09-03", "time": "09:00", "label": "Wednesday 3 Sep at 9:00 AM"},
+      {"date": "2026-09-03", "time": "14:30", "label": "Wednesday 3 Sep at 2:30 PM"}
     ],
     "max_retry_attempts": 3
   },
   {
     "patient_name": "John Doe",
-    "patient_phone": "+15551110002",
+    "patient_phone": "+<E.164-phone-number>",
     "clinic_name": "City Medical Centre",
-    "appointment_date": "2026-08-17",
+    "appointment_date": "2026-09-01",
     "appointment_time": "11:00",
     "language": "English",
-    "region": "US",
+    "region": "IN",
     "alternative_slots": [
-      {"date": "2026-08-21", "time": "10:00", "label": "Friday 21 Aug at 10:00 AM"}
+      {"date": "2026-09-04", "time": "10:00", "label": "Thursday 4 Sep at 10:00 AM"}
     ],
     "max_retry_attempts": 3
   }

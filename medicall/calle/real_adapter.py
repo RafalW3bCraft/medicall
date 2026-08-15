@@ -245,13 +245,19 @@ def _parse_status_content(run_id: str, content: dict) -> CallResult:
     """
     Parse a get_call_run structuredContent dict into a CallResult.
 
-    Content shape (from CLI --json output):
+    Real CALL-E response shape (confirmed from live call):
       {
         run_id, status, message,
         result: {
           summary, post_summary, transcript, call_id,
-          outcome: {task_completed, evidence, ...},
-          extracted: {patient_reports, appointment_confirmed, ...}
+          outcome: {
+            task_completed, completion_confidence: {score, label},
+            evidence: [str, ...]          ← list of strings, not dicts
+          },
+          extracted: {
+            calling: {duration_seconds, started_at, ended_at, ...},
+            patient_reports, appointment_confirmed, ...
+          }
         },
         activity: [...]
       }
@@ -261,10 +267,30 @@ def _parse_status_content(run_id: str, content: dict) -> CallResult:
 
     transcript: str | None = result_block.get("transcript")
     call_id: str | None = result_block.get("call_id")
+
+    # evidence is list[str] in real CALL-E output
     evidence: list = (result_block.get("outcome") or {}).get("evidence") or []
 
-    # Structured extracted data (populated when CALL-E uses a result schema)
+    # Timing from extracted.calling
     extracted: dict = result_block.get("extracted") or {}
+    calling: dict = extracted.get("calling") or {}
+    duration_seconds: int | None = calling.get("duration_seconds")
+
+    started_at = None
+    ended_at = None
+    try:
+        from datetime import datetime, timezone
+        if calling.get("started_at"):
+            started_at = datetime.fromisoformat(
+                calling["started_at"].replace("Z", "+00:00")
+            )
+        if calling.get("ended_at"):
+            ended_at = datetime.fromisoformat(
+                calling["ended_at"].replace("Z", "+00:00")
+            )
+    except (ValueError, TypeError):
+        pass
+
     intake = _parse_intake(extracted, status)
 
     return CallResult(
@@ -274,6 +300,9 @@ def _parse_status_content(run_id: str, content: dict) -> CallResult:
         transcript=transcript,
         evidence=evidence,
         call_id=call_id,
+        duration_seconds=duration_seconds,
+        started_at=started_at,
+        ended_at=ended_at,
         raw_calle_response=content,
     )
 

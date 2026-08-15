@@ -134,7 +134,9 @@ class CallResult(BaseModel):
     calle_status: str  # COMPLETED, NO_ANSWER, DECLINED, etc.
     intake: IntakeResult | None = None
     transcript: str | None = None
-    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    # CALL-E returns evidence as list[str] (human-readable strings).
+    # Typed as list[str | dict] to handle both current and future formats.
+    evidence: list[str | dict[str, Any]] = Field(default_factory=list)
     call_id: str | None = None
     duration_seconds: int | None = None
     started_at: datetime | None = None

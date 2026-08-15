@@ -2,72 +2,72 @@
 
 **Pre-arrival care coordination powered by CALL-E.**
 
-MediCall turns the routine pre-arrival phone call into an auditable coordination
-workflow. CALL-E calls patients, collects patient-reported information with
-consent, and produces a structured human-review handoff — before the patient
-arrives.
+MediCall turns the routine pre-arrival phone call into an auditable, structured
+coordination workflow. CALL-E places the call, collects patient-reported
+information with consent, and produces a human-review handoff — before the
+patient arrives.
 
-> **MediCall doesn't replace clinical judgment. It makes the phone work around
-> clinical care actionable before the patient arrives.**
+> **MediCall doesn't replace clinical judgment.  
+> It makes the phone work around clinical care actionable before the patient arrives.**
 
 ---
-
-## The Problem
-
-Healthcare clinics often learn important patient-reported changes only when
-the patient physically arrives. Staff spend hours on hold manually confirming
-appointments. MediCall automates this phone work and turns every pre-arrival
-call into a structured, auditable workflow.
 
 ## How It Works
 
 ```
 Appointment
      ↓
-CALL-E (outbound call)
+CALL-E outbound call  (plan_call → run_call → poll get_call_run)
      ↓
-Patient conversation
+Patient conversation  (consent → intake → structured result)
      ↓
-Structured result + evidence
+Deterministic policy  (D = f(R, C, P) — no LLM in the decision path)
      ↓
-Deterministic policy
+ROUTINE / HUMAN_REVIEW / ESCALATION
      ↓
-Human workflow (ROUTINE / HUMAN_REVIEW / ESCALATION)
-     ↓
-Staff handoff card
+Staff handoff card    (evidence-linked, auditable)
 ```
 
-**CALL-E is the execution substrate. MediCall is the workflow intelligence.**
-The policy engine is deterministic — MediCall never makes a clinical decision.
+**CALL-E is the execution substrate. MediCall is the workflow intelligence.  
+The policy engine is deterministic — MediCall never makes a clinical decision.**
 
 ---
 
-## Quick Start
-
-### Requirements
+## Requirements
 
 - Python 3.13+
-- [uv](https://docs.astral.sh/uv/) (installed automatically)
-- CALL-E CLI authenticated (`calle auth status`)
+- `calle` CLI — `npm install -g @call-e/cli` (then `calle auth login`)
+- `uv` — `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-### Install
+---
+
+## Setup
 
 ```bash
 git clone <repo-url> medicall
 cd medicall
+
+# Create virtualenv and install
+uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
+
+# Copy env template
 cp .env.example .env
+# Edit .env if needed (defaults work for mock mode)
 ```
 
-### Run the demo (mock — no real calls)
+---
+
+## Commands
+
+### 1. Run the eval harness (mock — no real calls)
+
+Runs all 10 acceptance scenarios using `MockCallEAdapter`. Confirms the
+full state machine, policy engine, and handoff logic work correctly.
+**No CALL-E credits used.**
 
 ```bash
-bash examples/demo.sh
-```
-
-### Run the eval harness
-
-```bash
+source .venv/bin/activate
 python -m eval.run_eval
 ```
 
@@ -75,45 +75,156 @@ Expected output:
 ```
 MediCall Eval Harness
 ──────────────────────────────────────────────────────
-Scenario                                    Result
-──────────────────────────────────────────────────────
-✓  001 — Confirm                            PASS
-✓  002 — Reschedule                         PASS
-✓  003 — No answer (1 attempt)              PASS
-✓  004 — Consent declined                   PASS
-✓  005 — New symptom → HUMAN_REVIEW         PASS
-✓  006 — Ambiguous response → HUMAN_REVIEW  PASS
-✓  007 — Medical advice boundary            PASS
-✓  008 — Escalation path                    PASS
-✓  009 — Idempotency                        PASS
-✓  010 — Max retries                        PASS
+✓  001 — Confirm                           PASS
+✓  002 — Reschedule                        PASS
+✓  003 — No answer (1 attempt)             PASS
+✓  004 — Consent declined                  PASS
+✓  005 — New symptom → HUMAN_REVIEW        PASS
+✓  006 — Ambiguous response → HUMAN_REVIEW PASS
+✓  007 — Medical advice boundary           PASS
+✓  008 — Escalation path → HUMAN_REVIEW    PASS
+✓  009 — Idempotency                       PASS
+✓  010 — Max retries                       PASS
 ──────────────────────────────────────────────────────
   10 passed, 0 failed
 ```
 
-### Run tests
+---
+
+### 2. Run the unit and integration test suite
 
 ```bash
+source .venv/bin/activate
 pytest tests/ -v
 ```
 
-### Start the API (mock mode)
+All 44 tests must pass. The 2 acceptance tests are skipped by default
+(they require `CALLE_ACCEPTANCE=1` to avoid burning credits).
+
+---
+
+### 3. Start the API server (mock mode)
+
+Runs the FastAPI server using `MockCallEAdapter` — no real calls placed.
 
 ```bash
+source .venv/bin/activate
 USE_MOCK_CALLE=true uvicorn medicall.api.main:app --reload
-# POST http://localhost:8000/appointments/
-# GET  http://localhost:8000/appointments/{id}
-# GET  http://localhost:8000/health
 ```
 
-### Run a real CALL-E call
+Available endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/appointments/` | Create appointment + run coordination workflow |
+| `GET` | `/appointments/{id}` | Get workflow status and result |
+| `GET` | `/handoffs/` | List all handoffs (staff queue) |
+| `GET` | `/handoffs/?disposition=HUMAN_REVIEW` | Filter by disposition |
+| `GET` | `/handoffs/?pending_only=true` | Only unacknowledged handoffs |
+| `GET` | `/handoffs/{id}` | Full handoff detail with evidence chain |
+| `PATCH` | `/handoffs/{id}/acknowledge` | Staff acknowledges a handoff |
+
+**Example — create an appointment:**
+```bash
+curl -s -X POST http://localhost:8000/appointments/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "patient_name": "Jane Smith",
+    "patient_phone": "+<E.164-number>",
+    "clinic_name": "City Medical Centre",
+    "appointment_date": "2026-09-01",
+    "appointment_time": "10:00",
+    "language": "English",
+    "region": "IN"
+  }' | python3 -m json.tool
+```
+
+**Example — list pending handoffs:**
+```bash
+curl -s "http://localhost:8000/handoffs/?pending_only=true" | python3 -m json.tool
+```
+
+**Example — acknowledge a handoff:**
+```bash
+curl -s -X PATCH http://localhost:8000/handoffs/<handoff-id>/acknowledge \
+  -H "Content-Type: application/json" \
+  -d '{"acknowledged_by": "Nurse Jenkins"}' | python3 -m json.tool
+```
+
+---
+
+### 4. Start the API server (real CALL-E mode)
+
+**Uses real CALL-E calls. Requires authentication and credits.**
 
 ```bash
-# Ensure authenticated
+# Verify auth first
 calle auth status
 
-# Set USE_MOCK_CALLE=false in .env, then:
+# Start with real adapter
+source .venv/bin/activate
 USE_MOCK_CALLE=false uvicorn medicall.api.main:app --reload
+```
+
+Then `POST /appointments/` with a real phone number — CALL-E will place
+a live outbound call.
+
+---
+
+### 5. Run a real acceptance test call
+
+Places a single real CALL-E outbound call to verify the full
+`calle call start → calle call status` pipeline end-to-end.
+**Uses 1 CALL-E credit.**
+
+```bash
+# Ensure calle is authenticated
+calle auth status
+
+source .venv/bin/activate
+CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+<your-E.164-number> \
+  pytest tests/acceptance/test_real_adapter.py -v -s
+```
+
+The test verifies:
+- `calle` binary is locatable
+- `calle call start` returns a `run_id`
+- Polling loop completes with a terminal status
+- `CallResult` is correctly parsed (no forbidden clinical fields)
+
+---
+
+### 6. Change the mock scenario
+
+To test a specific workflow path without a real call:
+
+```bash
+# Available scenarios:
+# scenario_001_confirm           — patient confirms, no changes → ROUTINE
+# scenario_002_reschedule        — patient reschedules → ROUTINE
+# scenario_003_no_answer         — no answer → RETRY / flag
+# scenario_004_consent_declined  — patient declines intake → ROUTINE
+# scenario_005_new_symptom       — patient reports symptom → HUMAN_REVIEW
+# scenario_006_ambiguous         — unclear response → HUMAN_REVIEW
+# scenario_007_medical_advice    — patient asks medical question → boundary holds
+# scenario_008_escalation        — urgent symptom → HUMAN_REVIEW + handoff
+
+source .venv/bin/activate
+USE_MOCK_CALLE=true MOCK_SCENARIO=scenario_005_new_symptom \
+  uvicorn medicall.api.main:app --reload
+```
+
+---
+
+### 7. Run via Docker (one command)
+
+```bash
+# Mock mode (default — no real calls)
+docker-compose up
+
+# Real mode
+USE_MOCK_CALLE=false docker-compose up
 ```
 
 ---
@@ -122,61 +233,39 @@ USE_MOCK_CALLE=false uvicorn medicall.api.main:app --reload
 
 ```
 MediCall
-├── Coordination Engine     ← reusable orchestration core
-│   ├── WorkflowStateMachine
-│   ├── CALL-E Adapter (Real | Mock)
-│   ├── ResultValidator
-│   ├── PolicyEngine        ← D = f(R, C, P), deterministic
-│   └── HandoffGenerator
-│
-├── Healthcare Policy       ← domain-specific rules
-│   ├── ConsentPolicy
-│   ├── IntakeSchema
-│   └── DispositionPolicy
-│
-└── FastAPI layer
+├── core/           WorkflowState (15 states) · Pydantic models · EventStore · Idempotency
+├── calle/          PhoneExecutionPort Protocol
+│   ├── real_adapter.py    → calle CLI subprocess (call start + status poll)
+│   └── mock_adapter.py    → replays JSON scenarios (no credits)
+├── engine/         CoordinationEngine · ResultValidator · PolicyEngine · HandoffGenerator
+├── healthcare/     CALL-E goal builder (conversation policy embedded in goal text)
+└── api/            FastAPI · shared store · /appointments · /handoffs
 ```
 
-### State Machine (15 states)
-
-`CREATED → CALL_PENDING → CALLING → CONNECTED → CONSENT_OFFERED →
-CONSENTED → INTAKE → VALIDATION → POLICY_EVALUATION →
-ROUTINE | HUMAN_REVIEW | ESCALATION → COMPLETED`
-
-With retry loop: `NO_ANSWER → RETRY_PENDING → CALL_PENDING`
-
-### Safety Boundary (4 layers)
-
-1. Conversation policy in CALL-E goal text
-2. Pydantic schema validation (forbidden fields raise at construction)
-3. Semantic boundary check (regex patterns on transcripts)
-4. Deterministic policy engine (no LLM in the decision path)
-
----
-
-## CALL-E Integration
-
-MediCall uses the full `plan_call → run_call → get_call_run` lifecycle:
+### CALL-E integration
 
 ```python
-plan = await client.plan_call(to_phones=[phone], goal=goal)
-run  = await client.run_call(plan_id=plan.plan_id, confirm_token=plan.confirm_token)
-# poll until terminal:
-while run.status not in TERMINAL_STATUSES:
-    run = await client.get_call_run(run_id=run.run_id)
+# goal → calle call start → run_id → poll calle call status → terminal result
+# All via CLI subprocess using existing OAuth token from `calle auth login`
+# No separate API key required
 ```
 
-Idempotency keys are derived from `sha256(workflow_id:appointment_id:attempt)`.
+### Safety boundary (4 layers)
+
+1. **Conversation policy** — goal text prohibits clinical language
+2. **Pydantic schema** — forbidden field names raise `ValidationError` at construction
+3. **Semantic boundary** — regex rejects clinical language in transcripts
+4. **Deterministic policy** — `D = f(R, C, P)`, D is operational only, never a diagnosis
 
 ---
 
-## Contribution
+## CALL-E Hackathon Submission
 
-This project is submitted to the [CALL-E Hackathon](https://call-e.devpost.com)
-under the **Agent Skills** contribution area as a reusable
-`pre-arrival-coordination` skill.
+- **Contribution area:** Agent Skills
+- **PR target:** `github.com/CALLE-AI/awesome-phone-call-agents`
+- **Skill:** `SKILL.md` — reusable `pre-arrival-coordination` pattern
 
-See [SKILL.md](./SKILL.md) for the reusable pattern documentation.
+See [`SKILL.md`](./SKILL.md) for the generalised pattern documentation.
 
 ---
 
