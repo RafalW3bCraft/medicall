@@ -1,24 +1,36 @@
 {
-  "run_id": "mock-run-007",
-  "calle_status": "COMPLETED",
-  "intake": {
-    "appointment_confirmed": true,
-    "reschedule_requested": false,
-    "rescheduled_to": null,
-    "patient_reports": [
-      {
-        "patient_statement": "I've had a headache for two days. Do you think it's serious?",
-        "normalized_description": "headache duration two days, patient asked for medical opinion",
-        "source": "patient",
-        "call_offset_seconds": 35
+  "run_id": "rec-run-007",
+  "status": "COMPLETED",
+  "result": {
+    "transcript": "Patient: I've had a headache for two days. Do you think it's serious?\nAgent: I can make sure the care team knows what you've told me. I'm not in a position to give medical advice. I've noted your headache for them.",
+    "call_id": "call-rec-007",
+    "outcome": {
+      "task_completed": true,
+      "completion_confidence": {"score": 0.88, "label": "high"},
+      "evidence": ["Patient asked for medical opinion — agent declined and noted concern for care team"]
+    },
+    "extracted": {
+      "appointment_confirmed": true,
+      "reschedule_requested": false,
+      "consent_given": true,
+      "patient_reports": [
+        {
+          "patient_statement": "I've had a headache for two days. Do you think it's serious?",
+          "normalized_description": "headache duration two days, patient asked for medical opinion",
+          "source": "patient",
+          "call_offset_seconds": 35
+        }
+      ],
+      "calling": {
+        "duration_seconds": 48,
+        "started_at": "2026-08-17T09:00:00Z",
+        "ended_at": "2026-08-17T09:00:48Z"
       }
-    ],
-    "consent_given": true,
-    "call_completed": true
+    }
   },
-  "transcript": "Patient: I've had a headache for two days. Do you think it's serious?\nAgent: I can make sure the care team knows what you've told me. I'm not in a position to give medical advice. I've noted your headache for them.",
-  "evidence": [],
-  "call_id": "call-mock-007",
-  "duration_seconds": 48,
-  "raw_calle_response": {}
+  "activity": [
+    {"ts": "00:00:03", "level": "info", "kind": "callee_realtime", "message": "Call connected"},
+    {"ts": "00:00:35", "level": "info", "kind": "callee_realtime", "message": "Patient asked for medical opinion — boundary maintained"},
+    {"ts": "00:00:48", "level": "info", "kind": "callee_realtime", "message": "Call completed"}
+  ]
 }

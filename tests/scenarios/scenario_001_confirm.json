@@ -1,17 +1,29 @@
 {
-  "run_id": "mock-run-001",
-  "calle_status": "COMPLETED",
-  "intake": {
-    "appointment_confirmed": true,
-    "reschedule_requested": false,
-    "rescheduled_to": null,
-    "patient_reports": [],
-    "consent_given": true,
-    "call_completed": true
+  "run_id": "rec-run-001",
+  "status": "COMPLETED",
+  "result": {
+    "transcript": "Agent: Hello, may I speak with Jane Smith?\nPatient: Yes, this is Jane.\nAgent: Hi Jane, I'm calling from City Clinic about your appointment on Monday 17 Aug at 10:00 AM. Are you still planning to attend?\nPatient: Yes, I'll be there.\nAgent: Wonderful. Has anything changed since you booked?\nPatient: No, everything's fine.\nAgent: Great, we'll see you then. Have a good day!\nPatient: Thank you, bye.",
+    "call_id": "call-rec-001",
+    "outcome": {
+      "task_completed": true,
+      "completion_confidence": {"score": 0.95, "label": "high"},
+      "evidence": ["Patient confirmed attendance at Monday 17 Aug 10:00 AM appointment"]
+    },
+    "extracted": {
+      "appointment_confirmed": true,
+      "reschedule_requested": false,
+      "consent_given": true,
+      "patient_reports": [],
+      "calling": {
+        "duration_seconds": 42,
+        "started_at": "2026-08-17T09:00:00Z",
+        "ended_at": "2026-08-17T09:00:42Z"
+      }
+    }
   },
-  "transcript": "Agent: Hello, may I speak with Jane Smith?\nPatient: Yes, this is Jane.\nAgent: Hi Jane, I'm calling from City Clinic about your appointment on Monday 17 Aug at 10:00 AM. Are you still planning to attend?\nPatient: Yes, I'll be there.\nAgent: Wonderful. Has anything changed since you booked?\nPatient: No, everything's fine.\nAgent: Great, we'll see you then. Have a good day!\nPatient: Thank you, bye.",
-  "evidence": [],
-  "call_id": "call-mock-001",
-  "duration_seconds": 42,
-  "raw_calle_response": {}
+  "activity": [
+    {"ts": "00:00:03", "level": "info", "kind": "callee_realtime", "message": "Call connected"},
+    {"ts": "00:00:35", "level": "info", "kind": "callee_realtime", "message": "Patient confirmed appointment"},
+    {"ts": "00:00:42", "level": "info", "kind": "callee_realtime", "message": "Call completed"}
+  ]
 }

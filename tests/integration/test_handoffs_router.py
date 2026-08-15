@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from medicall.api import store as app_store
 from medicall.api.main import app
-from medicall.calle.mock_adapter import MockCallEAdapter
+from medicall.calle.recorded_adapter import RecordedCallEAdapter
 from medicall.engine.coordinator import CoordinationEngine
 from medicall.engine.handoff import HandoffGenerator
 from medicall.core.models import Appointment, AppointmentSlot
@@ -53,7 +53,7 @@ async def _run_scenario(scenario: str) -> str:
     )
     app_store.appointments[appt.id] = appt
     engine = CoordinationEngine(
-        phone_port=MockCallEAdapter(scenario=scenario),
+        phone_port=RecordedCallEAdapter(scenario=scenario),
         event_store=app_store.event_store,
         handoff_generator=HandoffGenerator(store=app_store.handoffs),
     )

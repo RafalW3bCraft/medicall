@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 
-from medicall.calle.port import PhoneExecutionPort
 from medicall.core.events import Event, EventType, InMemoryEventStore
 from medicall.core.idempotency import derive_idempotency_key
 from medicall.core.models import (
@@ -42,7 +42,7 @@ class CoordinationEngine:
 
     def __init__(
         self,
-        phone_port: PhoneExecutionPort,
+        phone_port: Any,
         event_store: InMemoryEventStore,
         validator: ResultValidator | None = None,
         policy_engine: PolicyEngine | None = None,

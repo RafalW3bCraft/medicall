@@ -1,7 +1,7 @@
 [
   {
     "patient_name": "Jane Smith",
-    "patient_phone": "+<E.164-phone-number>",
+    "patient_phone": "+918160094043",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-01",
     "appointment_time": "10:00",
@@ -15,7 +15,7 @@
   },
   {
     "patient_name": "John Doe",
-    "patient_phone": "+<E.164-phone-number>",
+    "patient_phone": "+918160094043",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-01",
     "appointment_time": "11:00",

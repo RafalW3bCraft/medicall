@@ -1,24 +1,36 @@
 {
-  "run_id": "mock-run-006",
-  "calle_status": "COMPLETED",
-  "intake": {
-    "appointment_confirmed": true,
-    "reschedule_requested": false,
-    "rescheduled_to": null,
-    "patient_reports": [
-      {
-        "patient_statement": "I've been feeling a bit off, not sure how to describe it.",
-        "normalized_description": "non-specific feeling unwell, patient unable to describe further",
-        "source": "patient",
-        "call_offset_seconds": 38
+  "run_id": "rec-run-006",
+  "status": "COMPLETED",
+  "result": {
+    "transcript": "Agent: Has anything changed since you booked?\nPatient: I've been feeling a bit off, not sure how to describe it.\nAgent: I've noted that for the care team. Is there anything else you'd like them to know?",
+    "call_id": "call-rec-006",
+    "outcome": {
+      "task_completed": true,
+      "completion_confidence": {"score": 0.80, "label": "medium"},
+      "evidence": ["Patient reported non-specific feeling unwell — care team notified"]
+    },
+    "extracted": {
+      "appointment_confirmed": true,
+      "reschedule_requested": false,
+      "consent_given": true,
+      "patient_reports": [
+        {
+          "patient_statement": "I've been feeling a bit off, not sure how to describe it.",
+          "normalized_description": "non-specific feeling unwell, patient unable to describe further",
+          "source": "patient",
+          "call_offset_seconds": 38
+        }
+      ],
+      "calling": {
+        "duration_seconds": 51,
+        "started_at": "2026-08-17T09:00:00Z",
+        "ended_at": "2026-08-17T09:00:51Z"
       }
-    ],
-    "consent_given": true,
-    "call_completed": true
+    }
   },
-  "transcript": "Agent: Has anything changed since you booked?\nPatient: I've been feeling a bit off, not sure how to describe it.\nAgent: I've noted that for the care team. Is there anything else you'd like them to know?",
-  "evidence": [],
-  "call_id": "call-mock-006",
-  "duration_seconds": 51,
-  "raw_calle_response": {}
+  "activity": [
+    {"ts": "00:00:03", "level": "info", "kind": "callee_realtime", "message": "Call connected"},
+    {"ts": "00:00:38", "level": "info", "kind": "callee_realtime", "message": "Patient reported feeling unwell (non-specific)"},
+    {"ts": "00:00:51", "level": "info", "kind": "callee_realtime", "message": "Call completed"}
+  ]
 }

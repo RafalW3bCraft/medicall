@@ -1,25 +1,54 @@
 """
-Eval harness — runs all 10 acceptance scenarios and prints a pass/fail table.
+MediCall Eval / Batch Runner
 
-Usage:
-    python -m eval.run_eval
-    # or from repo root:
-    cd medicall && python -m eval.run_eval
+Two modes:
+
+  1. Scenario smoke-test (default — no CSV):
+       cd medicall && python -m eval.run_eval
+     Runs all 8 recorded scenarios through RecordedCallEAdapter → pass/fail table.
+
+  2. Live CSV batch runner:
+       cd medicall && python -m eval.run_eval --csv path/to/appointments.json
+     Reads a JSON file of appointment dicts, calls each patient via
+     RealCallEAdapter, and prints live console activity for every call.
+
+CSV / JSON file format (same as examples/appointments.example.json):
+    [
+      {
+        "patient_name": "Jane Smith",
+        "patient_phone": "+15551234567",
+        "clinic_name": "City Medical Centre",
+        "appointment_date": "2026-09-01",
+        "appointment_time": "10:00",
+        "language": "English",
+        "region": "IN",
+        "alternative_slots": [...],
+        "max_retry_attempts": 3
+      },
+      ...
+    ]
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import json
 import sys
 import traceback
 from dataclasses import dataclass
+from pathlib import Path
 
-from medicall.calle.mock_adapter import MockCallEAdapter
+from medicall.calle.real_adapter import RealCallEAdapter
+from medicall.calle.recorded_adapter import RecordedCallEAdapter
 from medicall.core.events import InMemoryEventStore
 from medicall.core.models import Appointment, AppointmentSlot
 from medicall.core.state_machine import WorkflowState
 from medicall.engine.coordinator import CoordinationEngine
+from medicall.engine.handoff import HandoffGenerator
 
+
+# ── Smoke-test scenarios ───────────────────────────────────────────────────────
 
 @dataclass
 class EvalCase:
@@ -92,7 +121,7 @@ EVAL_CASES: list[EvalCase] = [
 ]
 
 
-def _make_appointment(max_retries: int = 3) -> Appointment:
+def _make_test_appointment(max_retries: int = 3) -> Appointment:
     return Appointment(
         patient_name="Eval Patient",
         patient_phone="+15550000099",
@@ -107,25 +136,25 @@ def _make_appointment(max_retries: int = 3) -> Appointment:
     )
 
 
-async def run_case(case: EvalCase) -> tuple[bool, str]:
+async def _run_smoke_case(case: EvalCase) -> tuple[bool, str]:
     try:
-        mock = MockCallEAdapter(scenario=case.scenario)
+        adapter = RecordedCallEAdapter(scenario=case.scenario)
         store = InMemoryEventStore()
-        engine = CoordinationEngine(phone_port=mock, event_store=store)
-        appt = _make_appointment(case.max_retries)
+        engine = CoordinationEngine(phone_port=adapter, event_store=store)
+        appt = _make_test_appointment(case.max_retries)
 
         # Special case: idempotency test runs engine twice
         if "Idempotency" in case.name:
             r1 = await engine.run(appt)
             r2 = await engine.run(appt)
             assert r1.id != r2.id, "Workflow IDs must be distinct"
-            assert mock.call_count == 2, f"Expected 2 CALL-E calls, got {mock.call_count}"
+            assert adapter.call_count == 2, f"Expected 2 calls, got {adapter.call_count}"
             return True, "PASS"
 
         # Special case: max retries
         if "Max retries" in case.name:
             record = await engine.run(appt)
-            assert mock.call_count == 3, f"Expected 3 calls, got {mock.call_count}"
+            assert adapter.call_count == 3, f"Expected 3 calls, got {adapter.call_count}"
             assert record.state == WorkflowState.COMPLETED
             return True, "PASS"
 
@@ -167,14 +196,15 @@ async def run_case(case: EvalCase) -> tuple[bool, str]:
         return False, f"FAIL — {exc}"
 
 
-async def main() -> None:
+async def _smoke_test() -> None:
+    """Run all recorded scenarios and print pass/fail table."""
     col_name = 42
     col_result = 10
 
     header = f"{'Scenario':<{col_name}}  {'Result':<{col_result}}"
     divider = "─" * len(header)
     print()
-    print("MediCall Eval Harness")
+    print("MediCall Eval Harness — Smoke Test (recorded scenarios)")
     print(divider)
     print(header)
     print(divider)
@@ -183,7 +213,7 @@ async def main() -> None:
     failed = 0
 
     for case in EVAL_CASES:
-        ok, label = await run_case(case)
+        ok, label = await _run_smoke_case(case)
         marker = "✓" if ok else "✗"
         print(f"{marker}  {case.name:<{col_name - 3}} {label:<{col_result}}")
         if ok:
@@ -199,5 +229,123 @@ async def main() -> None:
         sys.exit(1)
 
 
+# ── Live CSV batch runner ──────────────────────────────────────────────────────
+
+def _load_appointments(path: str) -> list[Appointment]:
+    """Load appointments from a JSON file (list of appointment dicts)."""
+    data = json.loads(Path(path).read_text())
+    if not isinstance(data, list):
+        raise ValueError(f"Expected a JSON array in {path}, got {type(data).__name__}")
+
+    appointments = []
+    for i, row in enumerate(data):
+        try:
+            # Convert alternative_slots dicts → AppointmentSlot objects
+            raw_slots = row.pop("alternative_slots", [])
+            slots = [AppointmentSlot(**s) for s in raw_slots]
+            appt = Appointment(**row, alternative_slots=slots)
+            appointments.append(appt)
+        except Exception as exc:
+            raise ValueError(f"Row {i + 1} in {path} is invalid: {exc}") from exc
+
+    return appointments
+
+
+async def _run_live_batch(csv_path: str) -> None:
+    """Load appointments from JSON and call each via RealCallEAdapter."""
+    appointments = _load_appointments(csv_path)
+    total = len(appointments)
+
+    print()
+    print(f"MediCall Batch Runner — {total} appointment(s) from {csv_path}")
+    print("=" * 60)
+
+    results: list[tuple[str, str, str]] = []  # (patient_name, status, disposition)
+
+    for idx, appt in enumerate(appointments, start=1):
+        print(f"\n[{idx}/{total}] {appt.patient_name}  {appt.patient_phone}")
+        print(f"     Clinic: {appt.clinic_name}  "
+              f"Appointment: {appt.appointment_date} {appt.appointment_time}")
+        print("─" * 60)
+
+        try:
+            adapter = RealCallEAdapter()
+            handoffs: dict = {}
+            store = InMemoryEventStore()
+            engine = CoordinationEngine(
+                phone_port=adapter,
+                event_store=store,
+                handoff_generator=HandoffGenerator(store=handoffs),
+            )
+
+            record = await engine.run(appt)
+
+            disposition = (
+                record.policy_decision.disposition
+                if record.policy_decision
+                else "UNKNOWN"
+            )
+            action = (
+                record.policy_decision.workflow_action
+                if record.policy_decision
+                else "—"
+            )
+            calle_status = (
+                record.call_result.calle_status if record.call_result else "—"
+            )
+
+            print(f"   State:       {record.state.value}")
+            print(f"   CALL-E:      {calle_status}")
+            print(f"   Disposition: {disposition}")
+            print(f"   Action:      {action}")
+            if record.handoff_id:
+                print(f"   Handoff:     {record.handoff_id}")
+            if record.error:
+                print(f"   Error:       {record.error}")
+
+            results.append((appt.patient_name, calle_status, disposition))
+
+        except Exception as exc:
+            print(f"   ERROR: {exc}")
+            traceback.print_exc()
+            results.append((appt.patient_name, "ERROR", str(exc)[:60]))
+
+    # Summary table
+    print()
+    print("=" * 60)
+    print("Batch Summary")
+    print("─" * 60)
+    col_w = 22
+    print(f"  {'Patient':<{col_w}}  {'CALL-E':<12}  Disposition")
+    print(f"  {'─' * col_w}  {'─' * 12}  {'─' * 12}")
+    for name, status, dispo in results:
+        print(f"  {name:<{col_w}}  {status:<12}  {dispo}")
+    print()
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="python -m eval.run_eval",
+        description="MediCall eval harness — smoke test or live batch runner",
+    )
+    parser.add_argument(
+        "--csv",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Path to a JSON file containing a list of appointment dicts. "
+            "When provided, runs live CALL-E calls via RealCallEAdapter. "
+            "Without this flag, runs the recorded smoke-test scenarios."
+        ),
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    args = _parse_args()
+    if args.csv:
+        asyncio.run(_run_live_batch(args.csv))
+    else:
+        asyncio.run(_smoke_test())

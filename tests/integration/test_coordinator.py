@@ -1,12 +1,13 @@
 """
-Integration tests for CoordinationEngine using MockCallEAdapter.
+Integration tests for CoordinationEngine using RecordedCallEAdapter.
 
-All 10 acceptance scenarios from the Phase 0 spec are exercised here.
+All 10 acceptance scenarios are exercised here using fixtures in the real
+CALL-E structuredContent shape, parsed through the production parser.
 No real CALL-E calls are made.
 """
 from __future__ import annotations
 import pytest
-from medicall.calle.mock_adapter import MockCallEAdapter
+from medicall.calle.recorded_adapter import RecordedCallEAdapter
 from medicall.core.events import InMemoryEventStore
 from medicall.core.models import Appointment, AppointmentSlot
 from medicall.core.state_machine import WorkflowState
@@ -33,7 +34,7 @@ def _make_appointment(**kwargs) -> Appointment:
 def _engine(scenario: str) -> tuple[CoordinationEngine, InMemoryEventStore]:
     store = InMemoryEventStore()
     engine = CoordinationEngine(
-        phone_port=MockCallEAdapter(scenario=scenario),
+        phone_port=RecordedCallEAdapter(scenario=scenario),
         event_store=store,
     )
     return engine, store
@@ -139,11 +140,11 @@ async def test_scenario_009_idempotency():
     """
     The same appointment can be run through the engine multiple times,
     but each run should have a distinct workflow_id and attempt_number,
-    producing a distinct idempotency_key. The mock adapter tracks call_count.
+    producing a distinct idempotency_key. The adapter tracks call_count.
     """
-    mock = MockCallEAdapter(scenario="scenario_001_confirm")
+    adapter = RecordedCallEAdapter(scenario="scenario_001_confirm")
     store = InMemoryEventStore()
-    engine = CoordinationEngine(phone_port=mock, event_store=store)
+    engine = CoordinationEngine(phone_port=adapter, event_store=store)
 
     appt = _make_appointment()
     record1 = await engine.run(appt)
@@ -154,18 +155,18 @@ async def test_scenario_009_idempotency():
     record2 = await engine.run(appt)
 
     assert record1.id != record2.id
-    assert mock.call_count == 2  # Two distinct calls, two distinct keys
+    assert adapter.call_count == 2  # Two distinct calls, two distinct keys
 
 
 # ── Scenario 010: Max retries → COMPLETED with flag ──────────────────────────
 
 @pytest.mark.asyncio
 async def test_scenario_010_max_retries():
-    mock = MockCallEAdapter(scenario="scenario_003_no_answer")
+    adapter = RecordedCallEAdapter(scenario="scenario_003_no_answer")
     store = InMemoryEventStore()
-    engine = CoordinationEngine(phone_port=mock, event_store=store)
+    engine = CoordinationEngine(phone_port=adapter, event_store=store)
 
     record = await engine.run(_make_appointment(max_retry_attempts=3))
     assert record.state == WorkflowState.COMPLETED
     # Should have retried up to max_retry_attempts times
-    assert mock.call_count == 3
+    assert adapter.call_count == 3

@@ -1,30 +1,36 @@
 {
-  "run_id": "mock-run-008",
-  "calle_status": "COMPLETED",
-  "intake": {
-    "appointment_confirmed": true,
-    "reschedule_requested": false,
-    "rescheduled_to": null,
-    "patient_reports": [
-      {
-        "patient_statement": "I've been having severe difficulty breathing since this morning.",
-        "normalized_description": "severe difficulty breathing, onset this morning",
-        "source": "patient",
-        "call_offset_seconds": 30
+  "run_id": "rec-run-008",
+  "status": "COMPLETED",
+  "result": {
+    "transcript": "Patient: I've been having severe difficulty breathing since this morning.\nAgent: I've noted what you've told me for the care team. I'm not able to give medical advice.",
+    "call_id": "call-rec-008",
+    "outcome": {
+      "task_completed": true,
+      "completion_confidence": {"score": 0.93, "label": "high"},
+      "evidence": ["Patient reported severe difficulty breathing — care team alerted"]
+    },
+    "extracted": {
+      "appointment_confirmed": true,
+      "reschedule_requested": false,
+      "consent_given": true,
+      "patient_reports": [
+        {
+          "patient_statement": "I've been having severe difficulty breathing since this morning.",
+          "normalized_description": "severe difficulty breathing, onset this morning",
+          "source": "patient",
+          "call_offset_seconds": 30
+        }
+      ],
+      "calling": {
+        "duration_seconds": 39,
+        "started_at": "2026-08-17T09:00:00Z",
+        "ended_at": "2026-08-17T09:00:39Z"
       }
-    ],
-    "consent_given": true,
-    "call_completed": true
-  },
-  "transcript": "Patient: I've been having severe difficulty breathing since this morning.\nAgent: I've noted what you've told me for the care team. I'm not able to give medical advice.",
-  "evidence": [
-    {
-      "rule": "R03_new_symptom_reported",
-      "patient_statement": "I've been having severe difficulty breathing since this morning.",
-      "call_offset_seconds": 30
     }
-  ],
-  "call_id": "call-mock-008",
-  "duration_seconds": 39,
-  "raw_calle_response": {}
+  },
+  "activity": [
+    {"ts": "00:00:03", "level": "info", "kind": "callee_realtime", "message": "Call connected"},
+    {"ts": "00:00:30", "level": "info", "kind": "callee_realtime", "message": "Patient reported severe breathing difficulty — escalation flagged"},
+    {"ts": "00:00:39", "level": "info", "kind": "callee_realtime", "message": "Call completed"}
+  ]
 }

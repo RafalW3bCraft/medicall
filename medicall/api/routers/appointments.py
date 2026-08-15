@@ -7,27 +7,16 @@ GET  /appointments/{id} — get workflow status and result
 
 from __future__ import annotations
 
-import os
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from medicall.api import store as app_store
-from medicall.calle.mock_adapter import MockCallEAdapter
 from medicall.calle.real_adapter import RealCallEAdapter
 from medicall.core.models import Appointment, AppointmentSlot
 from medicall.engine.coordinator import CoordinationEngine
 from medicall.engine.handoff import HandoffGenerator
 
 router = APIRouter()
-
-
-def _get_phone_port():
-    use_mock = os.getenv("USE_MOCK_CALLE", "true").lower() == "true"
-    if use_mock:
-        scenario = os.getenv("MOCK_SCENARIO", "scenario_001_confirm")
-        return MockCallEAdapter(scenario=scenario)
-    return RealCallEAdapter()
 
 
 class AppointmentRequest(BaseModel):
@@ -60,7 +49,7 @@ async def create_appointment(body: AppointmentRequest) -> WorkflowStatusResponse
     app_store.appointments[appointment.id] = appointment
 
     engine = CoordinationEngine(
-        phone_port=_get_phone_port(),
+        phone_port=RealCallEAdapter(),
         event_store=app_store.event_store,
         # Wire HandoffGenerator to the shared handoffs store
         handoff_generator=HandoffGenerator(store=app_store.handoffs),

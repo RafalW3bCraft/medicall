@@ -18,8 +18,11 @@ Flow:
   calle call status --run-id <id> --json
       → returns {result: {structuredContent: <get_call_run>}}
 
-Only used when USE_MOCK_CALLE=false. All development and unit/integration
-tests must use MockCallEAdapter to avoid burning call credits.
+Console activity:
+  During each poll cycle the activity list from the structuredContent is
+  printed to stdout so operators running the CLI or eval harness can follow
+  the call in real-time:
+    [HH:MM:SS] <message>
 """
 
 from __future__ import annotations
@@ -29,10 +32,16 @@ import json
 import logging
 import os
 import shutil
-import subprocess
+import sys
 from pathlib import Path
 
-from medicall.core.models import CallResult, CallTask, IntakeResult, PatientReport
+from medicall.core.models import (
+    AppointmentSlot,
+    CallResult,
+    CallTask,
+    IntakeResult,
+    PatientReport,
+)
 from medicall.core.state_machine import CALLE_TERMINAL_STATUSES
 
 logger = logging.getLogger(__name__)
@@ -99,6 +108,26 @@ def _build_env() -> dict[str, str]:
     return env
 
 
+def _print_activity(content: dict, seen_ts: set[str]) -> set[str]:
+    """
+    Print new activity items from a structuredContent dict to stdout.
+
+    Returns the updated set of already-printed timestamps so callers can
+    avoid printing duplicates across poll cycles.
+    """
+    activity = content.get("activity") or []
+    for item in activity:
+        ts = item.get("ts", "")
+        msg = item.get("message", "")
+        # Use ts+msg as dedup key — some items may share timestamps
+        key = f"{ts}|{msg}"
+        if key not in seen_ts:
+            seen_ts.add(key)
+            label = f"[{ts}]" if ts else "[----]"
+            print(f"  {label} {msg}", flush=True)
+    return seen_ts
+
+
 class RealCallEAdapter:
     """
     Production CALL-E adapter using the `calle` CLI subprocess.
@@ -106,6 +135,9 @@ class RealCallEAdapter:
     Authentication is handled by the existing CLI token cache
     (~/.calle-mcp/cli/*/token.json) written by `calle auth login`.
     No separate API key is required.
+
+    Activity events are printed to stdout in real-time during polling so
+    operators can follow the call progress in their terminal.
     """
 
     async def execute(self, task: CallTask) -> CallResult:
@@ -159,9 +191,15 @@ class RealCallEAdapter:
             )
 
         logger.info("CALL-E call started | run_id=%s status=%s", run_id, current_status)
+        print(f"\n▶  CALL-E call started  run_id={run_id}  status={current_status}", flush=True)
+
+        # Print any activity already available after start
+        seen_activity: set[str] = set()
+        seen_activity = _print_activity(status_content, seen_activity)
 
         # If already terminal after start, parse immediately
         if current_status.upper() in CALLE_TERMINAL_STATUSES:
+            print(f"   → Terminal immediately: {current_status}\n", flush=True)
             return _parse_status_content(run_id, status_content)
 
         # Step 2: poll until terminal
@@ -181,6 +219,9 @@ class RealCallEAdapter:
             last_content = status_raw.get("result", {}).get("structuredContent", {})
             current_status = last_content.get("status", "")
 
+            # Print new activity items since last poll
+            seen_activity = _print_activity(last_content, seen_activity)
+
             logger.debug(
                 "Polling | run_id=%s status=%s elapsed=%.0fs",
                 run_id, current_status, elapsed,
@@ -193,6 +234,7 @@ class RealCallEAdapter:
             "CALL-E call terminal | run_id=%s status=%s",
             run_id, current_status,
         )
+        print(f"   → Terminal: {current_status}\n", flush=True)
         return _parse_status_content(run_id, last_content)
 
 
@@ -279,7 +321,7 @@ def _parse_status_content(run_id: str, content: dict) -> CallResult:
     started_at = None
     ended_at = None
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime
         if calling.get("started_at"):
             started_at = datetime.fromisoformat(
                 calling["started_at"].replace("Z", "+00:00")
@@ -321,10 +363,21 @@ def _parse_intake(extracted: dict, calle_status: str) -> IntakeResult | None:
             for r in (extracted.get("patient_reports") or [])
             if isinstance(r, dict) and r.get("patient_statement")
         ]
+
+        # Parse rescheduled_to if present in extracted
+        rescheduled_to: AppointmentSlot | None = None
+        rt = extracted.get("rescheduled_to")
+        if rt and isinstance(rt, dict) and rt.get("date") and rt.get("time"):
+            rescheduled_to = AppointmentSlot(
+                date=rt["date"],
+                time=rt["time"],
+                label=rt.get("label", f"{rt['date']} {rt['time']}"),
+            )
+
         return IntakeResult(
             appointment_confirmed=bool(extracted.get("appointment_confirmed", False)),
             reschedule_requested=bool(extracted.get("reschedule_requested", False)),
-            rescheduled_to=None,
+            rescheduled_to=rescheduled_to,
             patient_reports=reports,
             consent_given=bool(extracted.get("consent_given", True)),
             call_completed=True,

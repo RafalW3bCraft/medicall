@@ -1,17 +1,29 @@
 {
-  "run_id": "mock-run-004",
-  "calle_status": "COMPLETED",
-  "intake": {
-    "appointment_confirmed": true,
-    "reschedule_requested": false,
-    "rescheduled_to": null,
-    "patient_reports": [],
-    "consent_given": false,
-    "call_completed": true
+  "run_id": "rec-run-004",
+  "status": "COMPLETED",
+  "result": {
+    "transcript": "Agent: Hi, calling from City Clinic about your appointment. Before I continue, I'd like to ask a few coordination questions. Is that okay?\nPatient: I'd rather not, thanks.\nAgent: Of course, no problem. We'll note that. See you at your appointment!",
+    "call_id": "call-rec-004",
+    "outcome": {
+      "task_completed": true,
+      "completion_confidence": {"score": 0.85, "label": "high"},
+      "evidence": ["Patient declined pre-arrival intake questions"]
+    },
+    "extracted": {
+      "appointment_confirmed": true,
+      "reschedule_requested": false,
+      "consent_given": false,
+      "patient_reports": [],
+      "calling": {
+        "duration_seconds": 22,
+        "started_at": "2026-08-17T09:00:00Z",
+        "ended_at": "2026-08-17T09:00:22Z"
+      }
+    }
   },
-  "transcript": "Agent: Hi, calling from City Clinic about your appointment. Before I continue, I'd like to ask a few coordination questions. Is that okay?\nPatient: I'd rather not, thanks.\nAgent: Of course, no problem. We'll note that. See you at your appointment!",
-  "evidence": [],
-  "call_id": "call-mock-004",
-  "duration_seconds": 22,
-  "raw_calle_response": {}
+  "activity": [
+    {"ts": "00:00:03", "level": "info", "kind": "callee_realtime", "message": "Call connected"},
+    {"ts": "00:00:15", "level": "info", "kind": "callee_realtime", "message": "Patient declined intake questions"},
+    {"ts": "00:00:22", "level": "info", "kind": "callee_realtime", "message": "Call completed — consent declined"}
+  ]
 }
