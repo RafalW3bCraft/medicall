@@ -37,10 +37,20 @@ RULES YOU MUST FOLLOW:
 - Record patient statements verbatim with the approximate call offset time.
 - If a patient asks a medical question beyond confirming/rescheduling, deflect
   to step 5's script and record what they said for the care team.
-- Language: {language}.
 """.strip()
 
-_NO_SLOTS_TEXT = "No alternative slots are currently available. Ask if they would like the clinic to call them back to reschedule."
+# Prepended to the goal when the call language is not English.
+# Placed at the very start so CALL-E cannot miss it.
+_LANGUAGE_PREFIX = (
+    "Conduct this entire call in {language}. "
+    "Speak only in {language} throughout — greet, ask questions, "
+    "and respond entirely in {language}.\n\n"
+)
+
+_NO_SLOTS_TEXT = (
+    "No alternative slots are currently available. "
+    "Ask if they would like the clinic to call them back to reschedule."
+)
 
 
 def build_goal(appointment: Appointment) -> str:
@@ -52,11 +62,17 @@ def build_goal(appointment: Appointment) -> str:
     else:
         alt_slots_text = _NO_SLOTS_TEXT
 
-    return _GOAL_TEMPLATE.format(
+    goal = _GOAL_TEMPLATE.format(
         patient_name=appointment.patient_name,
         clinic_name=appointment.clinic_name,
         appointment_date=appointment.appointment_date,
         appointment_time=appointment.appointment_time,
         alt_slots_text=alt_slots_text,
-        language=appointment.language,
     )
+
+    # For non-English languages, prepend an explicit conduct instruction so
+    # CALL-E opens and runs the entire conversation in the requested language.
+    if appointment.language.strip().lower() != "english":
+        goal = _LANGUAGE_PREFIX.format(language=appointment.language) + goal
+
+    return goal

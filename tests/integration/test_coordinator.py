@@ -12,6 +12,7 @@ from medicall.core.events import InMemoryEventStore
 from medicall.core.models import Appointment, AppointmentSlot
 from medicall.core.state_machine import WorkflowState
 from medicall.engine.coordinator import CoordinationEngine
+from medicall.healthcare.goal_builder import build_goal
 
 
 def _make_appointment(**kwargs) -> Appointment:
@@ -170,3 +171,43 @@ async def test_scenario_010_max_retries():
     assert record.state == WorkflowState.COMPLETED
     # Should have retried up to max_retry_attempts times
     assert adapter.call_count == 3
+
+
+# ── Hindi language: goal prefix ───────────────────────────────────────────────
+
+def test_hindi_goal_has_language_prefix():
+    """
+    When language='Hindi', build_goal() must prepend the conduct instruction
+    so CALL-E opens and runs the entire call in Hindi.
+    """
+    appt = _make_appointment(language="Hindi")
+    goal = build_goal(appt)
+    assert goal.startswith("Conduct this entire call in Hindi."), (
+        f"Expected Hindi prefix at start of goal, got:\n{goal[:120]}"
+    )
+    assert "Speak only in Hindi throughout" in goal
+    # Goal body (steps/rules) still present
+    assert "STEPS" in goal
+    assert "RULES" in goal
+
+
+# ── Hindi language: full engine run ──────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_scenario_hindi_confirm():
+    """
+    Full engine run with a Hindi-language appointment using the Hindi
+    confirm fixture. Should complete as ROUTINE — same policy path as English.
+    """
+    appt = _make_appointment(language="Hindi")
+    adapter = RecordedCallEAdapter(scenario="scenario_001_confirm_hindi")
+    store = InMemoryEventStore()
+    engine = CoordinationEngine(phone_port=adapter, event_store=store)
+
+    record = await engine.run(appt)
+    assert record.state == WorkflowState.COMPLETED
+    assert record.policy_decision.disposition == "ROUTINE"
+    assert record.error is None
+    # Verify the goal that would be sent contains the Hindi prefix
+    goal = build_goal(appt)
+    assert goal.startswith("Conduct this entire call in Hindi.")

@@ -1,0 +1,29 @@
+{
+  "run_id": "rec-run-001-hi",
+  "status": "COMPLETED",
+  "result": {
+    "transcript": "Agent: नमस्ते, क्या मैं जेन स्मिथ से बात कर सकता हूँ?\nPatient: हाँ, मैं जेन बोल रही हूँ।\nAgent: जेन जी, मैं सिटी मेडिकल सेंटर की तरफ से आपकी 1 सितम्बर दोपहर 2:00 बजे की अपॉइंटमेंट के बारे में फोन कर रहा हूँ। क्या आप आ सकेंगी?\nPatient: हाँ, मैं आऊँगी।\nAgent: बहुत अच्छा। क्या बुकिंग के बाद कुछ बदला है?\nPatient: नहीं, सब ठीक है।\nAgent: धन्यवाद जेन जी। मिलते हैं।\nPatient: शुक्रिया।",
+    "call_id": "call-rec-001-hi",
+    "outcome": {
+      "task_completed": true,
+      "completion_confidence": {"score": 0.95, "label": "high"},
+      "evidence": ["Patient confirmed attendance at 1 Sep 2:00 PM appointment (Hindi call)"]
+    },
+    "extracted": {
+      "appointment_confirmed": true,
+      "reschedule_requested": false,
+      "consent_given": true,
+      "patient_reports": [],
+      "calling": {
+        "duration_seconds": 38,
+        "started_at": "2026-09-01T08:30:00Z",
+        "ended_at": "2026-09-01T08:30:38Z"
+      }
+    }
+  },
+  "activity": [
+    {"ts": "00:00:03", "level": "info", "kind": "callee_realtime", "message": "Call connected (Hindi)"},
+    {"ts": "00:00:30", "level": "info", "kind": "callee_realtime", "message": "Patient confirmed appointment in Hindi"},
+    {"ts": "00:00:38", "level": "info", "kind": "callee_realtime", "message": "Hindi call completed"}
+  ]
+}
