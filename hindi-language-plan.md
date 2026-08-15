@@ -48,7 +48,7 @@ stays in English — CALL-E translates the delivery.
 - `medicall/medicall/healthcare/goal_builder.py` — `_GOAL_TEMPLATE` and `build_goal()`
 - `medicall/medicall/calle/real_adapter.py` line 167 — `--language` flag already set correctly
 
-**Status** — `[ ] pending`
+**Status** — `[x] done`
 
 ---
 
@@ -71,7 +71,7 @@ the batch runner demo immediately exercises Hindi without any extra config.
 **Relevant Context**
 - `medicall/examples/appointments.example.json`
 
-**Status** — `[ ] pending`
+**Status** — `[x] done`
 
 ---
 
@@ -108,7 +108,7 @@ text contains the Hindi conduct instruction and the result parses correctly.
 - `medicall/tests/integration/test_coordinator.py` — add tests here
 - `medicall/medicall/healthcare/goal_builder.py` — `build_goal()` to import
 
-**Status** — `[ ] pending`
+**Status** — `[x] done`
 
 ---
 
