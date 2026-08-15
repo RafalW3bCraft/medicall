@@ -17,7 +17,7 @@ patient arrives.
 ```
 Appointment
      ↓
-CALL-E outbound call  (plan_call → run_call → poll get_call_run)
+CALL-E outbound call  (calle call start → poll calle call status)
      ↓
 Patient conversation  (consent → intake → structured result)
      ↓
@@ -36,7 +36,7 @@ The policy engine is deterministic — MediCall never makes a clinical decision.
 ## Requirements
 
 - Python 3.13+
-- `calle` CLI — `npm install -g @call-e/cli` (then `calle auth login`)
+- `calle` CLI — `npm install -g @call-e/cli` then `calle auth login`
 - `uv` — `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
 ---
@@ -44,26 +44,40 @@ The policy engine is deterministic — MediCall never makes a clinical decision.
 ## Setup
 
 ```bash
-git clone <repo-url> medicall
+git clone <repo-url>
 cd medicall
 
 # Create virtualenv and install
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 
-# Copy env template
-cp .env.example .env
-# Edit .env if needed (defaults work for mock mode)
+# Authenticate with CALL-E (one time)
+export PATH="$HOME/.npm-global/bin:$PATH"
+calle auth login
 ```
 
 ---
 
 ## Commands
 
-### 1. Run the eval harness (mock — no real calls)
+### 1. Run the test suite
 
-Runs all 10 acceptance scenarios using `MockCallEAdapter`. Confirms the
-full state machine, policy engine, and handoff logic work correctly.
+44 unit + integration tests — no real calls, no credits used.
+
+```bash
+source .venv/bin/activate
+pytest tests/unit/ tests/integration/ -v
+```
+
+All 44 tests must pass. The acceptance tests in `tests/acceptance/` are
+skipped by default (require `CALLE_ACCEPTANCE=1`).
+
+---
+
+### 2. Run the eval smoke-test
+
+Runs all 10 recorded scenarios through the production parser. Confirms
+the full state machine, policy engine, and handoff logic work correctly.
 **No CALL-E credits used.**
 
 ```bash
@@ -73,7 +87,7 @@ python -m eval.run_eval
 
 Expected output:
 ```
-MediCall Eval Harness
+MediCall Eval Harness — Smoke Test (recorded scenarios)
 ──────────────────────────────────────────────────────
 ✓  001 — Confirm                           PASS
 ✓  002 — Reschedule                        PASS
@@ -91,47 +105,92 @@ MediCall Eval Harness
 
 ---
 
-### 2. Run the unit and integration test suite
+### 3. Live batch runner (real CALL-E calls)
+
+Places real outbound calls for each appointment in a JSON file.
+Live activity events are printed to the console during each call.
+**Uses CALL-E credits — ensure you are authenticated first.**
 
 ```bash
+# Verify auth
+export PATH="$HOME/.npm-global/bin:$PATH"
+calle auth status
+
 source .venv/bin/activate
-pytest tests/ -v
+python -m eval.run_eval --csv examples/appointments.example.json
 ```
 
-All 44 tests must pass. The 2 acceptance tests are skipped by default
-(they require `CALLE_ACCEPTANCE=1` to avoid burning credits).
+The JSON file is a list of appointment objects. See
+`examples/appointments.example.json` for the format.
+
+Console output during a call:
+```
+[1/2] Jane Smith  +918160094043
+     Clinic: City Medical Centre  Appointment: 2026-09-01 10:00
+────────────────────────────────────────────────────────────
+▶  CALL-E call started  run_id=abc123  status=IN_PROGRESS
+  [00:00:03] Call connected
+  [00:00:35] Patient confirmed appointment
+  [00:00:42] Call completed
+   → Terminal: COMPLETED
+
+   State:       COMPLETED
+   CALL-E:      COMPLETED
+   Disposition: ROUTINE
+   Action:      routine_complete
+```
 
 ---
 
-### 3. Start the API server (mock mode)
+### 4. Run a single acceptance test call
 
-Runs the FastAPI server using `MockCallEAdapter` — no real calls placed.
+Places one real CALL-E call to verify the full `calle call start →
+calle call status` pipeline end-to-end. **Uses 1 CALL-E credit.**
 
 ```bash
+export PATH="$HOME/.npm-global/bin:$PATH"
+calle auth status
+
 source .venv/bin/activate
-USE_MOCK_CALLE=true uvicorn medicall.api.main:app --reload
+CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+<your-E.164-number> \
+  pytest tests/acceptance/test_real_adapter.py -v -s
+```
+
+---
+
+### 5. Start the API server
+
+Runs the FastAPI server. Every `POST /appointments/` places a real
+CALL-E call. Requires authentication.
+
+```bash
+export PATH="$HOME/.npm-global/bin:$PATH"
+calle auth status
+
+source .venv/bin/activate
+uvicorn medicall.api.main:app --reload
 ```
 
 Available endpoints:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/appointments/` | Create appointment + run coordination workflow |
-| `GET` | `/appointments/{id}` | Get workflow status and result |
-| `GET` | `/handoffs/` | List all handoffs (staff queue) |
-| `GET` | `/handoffs/?disposition=HUMAN_REVIEW` | Filter by disposition |
-| `GET` | `/handoffs/?pending_only=true` | Only unacknowledged handoffs |
-| `GET` | `/handoffs/{id}` | Full handoff detail with evidence chain |
-| `PATCH` | `/handoffs/{id}/acknowledge` | Staff acknowledges a handoff |
+| Method  | Path                             | Description                             |
+|---------|----------------------------------|-----------------------------------------|
+| `GET`   | `/health`                        | Health check                            |
+| `POST`  | `/appointments/`                 | Create appointment + run workflow       |
+| `GET`   | `/appointments/{id}`             | Get workflow status                     |
+| `GET`   | `/handoffs/`                     | List all handoffs (staff queue)         |
+| `GET`   | `/handoffs/?disposition=HUMAN_REVIEW` | Filter by disposition              |
+| `GET`   | `/handoffs/?pending_only=true`   | Only unacknowledged handoffs            |
+| `GET`   | `/handoffs/{id}`                 | Full handoff detail with evidence chain |
+| `PATCH` | `/handoffs/{id}/acknowledge`     | Staff acknowledges a handoff            |
 
-**Example — create an appointment:**
+**Example — create an appointment (places a real call):**
 ```bash
 curl -s -X POST http://localhost:8000/appointments/ \
   -H "Content-Type: application/json" \
   -d '{
     "patient_name": "Jane Smith",
-    "patient_phone": "+<E.164-number>",
+    "patient_phone": "+918160094043",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-01",
     "appointment_time": "10:00",
@@ -154,89 +213,26 @@ curl -s -X PATCH http://localhost:8000/handoffs/<handoff-id>/acknowledge \
 
 ---
 
-### 4. Start the API server (real CALL-E mode)
-
-**Uses real CALL-E calls. Requires authentication and credits.**
+### 6. Docker
 
 ```bash
-# Verify auth first
-calle auth status
-
-# Start with real adapter
-source .venv/bin/activate
-USE_MOCK_CALLE=false uvicorn medicall.api.main:app --reload
-```
-
-Then `POST /appointments/` with a real phone number — CALL-E will place
-a live outbound call.
-
----
-
-### 5. Run a real acceptance test call
-
-Places a single real CALL-E outbound call to verify the full
-`calle call start → calle call status` pipeline end-to-end.
-**Uses 1 CALL-E credit.**
-
-```bash
-# Ensure calle is authenticated
-calle auth status
-
-source .venv/bin/activate
-CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+<your-E.164-number> \
-  pytest tests/acceptance/test_real_adapter.py -v -s
-```
-
-The test verifies:
-- `calle` binary is locatable
-- `calle call start` returns a `run_id`
-- Polling loop completes with a terminal status
-- `CallResult` is correctly parsed (no forbidden clinical fields)
-
----
-
-### 6. Change the mock scenario
-
-To test a specific workflow path without a real call:
-
-```bash
-# Available scenarios:
-# scenario_001_confirm           — patient confirms, no changes → ROUTINE
-# scenario_002_reschedule        — patient reschedules → ROUTINE
-# scenario_003_no_answer         — no answer → RETRY / flag
-# scenario_004_consent_declined  — patient declines intake → ROUTINE
-# scenario_005_new_symptom       — patient reports symptom → HUMAN_REVIEW
-# scenario_006_ambiguous         — unclear response → HUMAN_REVIEW
-# scenario_007_medical_advice    — patient asks medical question → boundary holds
-# scenario_008_escalation        — urgent symptom → HUMAN_REVIEW + handoff
-
-source .venv/bin/activate
-USE_MOCK_CALLE=true MOCK_SCENARIO=scenario_005_new_symptom \
-  uvicorn medicall.api.main:app --reload
-```
-
----
-
-### 7. Run via Docker (one command)
-
-```bash
-# Mock mode (default — no real calls)
+# Mount CALL-E token cache so the container can authenticate
 docker-compose up
-
-# Real mode
-USE_MOCK_CALLE=false docker-compose up
 ```
+
+The `docker-compose.yml` mounts `~/.calle-mcp` read-only into the
+container. Run `calle auth login` on the host first.
 
 ---
 
 ## Architecture
 
 ```
-MediCall
+medicall/
 ├── core/           WorkflowState (15 states) · Pydantic models · EventStore · Idempotency
-├── calle/          PhoneExecutionPort Protocol
-│   ├── real_adapter.py    → calle CLI subprocess (call start + status poll)
-│   └── mock_adapter.py    → replays JSON scenarios (no credits)
+├── calle/
+│   ├── real_adapter.py      → calle CLI subprocess (call start + status poll + activity print)
+│   └── recorded_adapter.py  → replays real-shaped fixtures through production parser (tests)
 ├── engine/         CoordinationEngine · ResultValidator · PolicyEngine · HandoffGenerator
 ├── healthcare/     CALL-E goal builder (conversation policy embedded in goal text)
 └── api/            FastAPI · shared store · /appointments · /handoffs
@@ -244,11 +240,23 @@ MediCall
 
 ### CALL-E integration
 
-```python
-# goal → calle call start → run_id → poll calle call status → terminal result
-# All via CLI subprocess using existing OAuth token from `calle auth login`
-# No separate API key required
 ```
+calle call start --to-phone <E.164> --goal <text> --json
+    → {run_id, status_result: {structuredContent: <get_call_run>}}
+
+calle call status --run-id <id> --json
+    → {result: {structuredContent: <get_call_run>}}
+```
+
+Authentication: existing CLI token cache (`~/.calle-mcp/cli/*/token.json`)
+written by `calle auth login`. No separate API key required.
+
+### Testing approach
+
+Integration tests use `RecordedCallEAdapter`, which loads fixtures in the
+**real CALL-E `structuredContent` shape** and passes them through the same
+`_parse_status_content()` parser used in production. The test path is
+identical to the live path — only the transport layer differs.
 
 ### Safety boundary (4 layers)
 

@@ -8,7 +8,6 @@ services:
     environment:
       - APP_ENV=development
       - DATABASE_URL=sqlite+aiosqlite:////data/medicall.db
-      - USE_MOCK_CALLE=false
     volumes:
       - medicall_data:/data
       # Mount CALL-E token cache so the container can place real calls

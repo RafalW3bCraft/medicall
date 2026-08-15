@@ -39,7 +39,7 @@ MediCall applies this pattern to healthcare pre-arrival coordination:
 - Produces a structured handoff for clinic staff
 - Never makes a clinical decision — only operational routing
 
-See `examples/healthcare/` for the full implementation.
+See the [`medicall/`](.) directory for the full reference implementation.
 
 ## Reusable Domains
 
