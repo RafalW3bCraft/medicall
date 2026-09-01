@@ -62,14 +62,14 @@ calle auth login
 
 ### 1. Run the test suite
 
-44 unit + integration tests — no real calls, no credits used.
+46 unit + integration tests — no real calls, no credits used.
 
 ```bash
 source .venv/bin/activate
 pytest tests/unit/ tests/integration/ -v
 ```
 
-All 44 tests must pass. The acceptance tests in `tests/acceptance/` are
+All 46 tests must pass. The acceptance tests in `tests/acceptance/` are
 skipped by default (require `CALLE_ACCEPTANCE=1`).
 
 ---

@@ -18,6 +18,18 @@ Flow:
   calle call status --run-id <id> --json
       → returns {result: {structuredContent: <get_call_run>}}
 
+Polling strategy (tunable via env vars):
+  POLL_FIRST_SECONDS    — delay before the very first status poll (default 2s).
+  POLL_INTERVAL_SECONDS — delay between subsequent polls (default 2s).
+                          Reduced from 10s so terminal status is caught within
+                          one Node.js subprocess round-trip after the call ends.
+  CALL_TIMEOUT_SECONDS  — hard ceiling before the adapter gives up (default 300s).
+
+Performance notes:
+  - Binary path cached after first resolution; poll cycles skip filesystem stats.
+  - `datetime` imported at module level; no repeated import in the parse hot path.
+  - CALL-E server-side provisioning (~22s) is unaffected — infrastructure only.
+
 Console activity:
   During each poll cycle the activity list from the structuredContent is
   printed to stdout so operators running the CLI or eval harness can follow
@@ -28,11 +40,11 @@ Console activity:
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 import json
 import logging
 import os
 import shutil
-import sys
 from pathlib import Path
 
 from medicall.core.models import (
@@ -47,7 +59,12 @@ from medicall.core.state_machine import CALLE_TERMINAL_STATUSES
 logger = logging.getLogger(__name__)
 
 CALL_TIMEOUT_SECONDS = float(os.getenv("CALL_TIMEOUT_SECONDS", "300"))
-POLL_INTERVAL_SECONDS = float(os.getenv("POLL_INTERVAL_SECONDS", "10"))
+# 2s steady-state interval — catches terminal status in one poll cycle
+# after the call ends rather than waiting up to 10s.
+POLL_INTERVAL_SECONDS = float(os.getenv("POLL_INTERVAL_SECONDS", "2"))
+# 2s first-poll delay — fast check right after call start returns so that
+# NO_ANSWER / VOICEMAIL / immediate COMPLETED outcomes surface quickly.
+POLL_FIRST_SECONDS = float(os.getenv("POLL_FIRST_SECONDS", "2"))
 
 # Attribution env required by the CALL-E skill spec
 _CALLE_ENV = {
@@ -66,6 +83,12 @@ _CALLE_SEARCH_PATHS = [
     Path("/usr/local/bin/calle"),
 ]
 
+# Binary path cache — resolved once, reused every poll cycle.
+# Avoids repeated filesystem stats + shutil.which per poll.
+# Invalidated when CALLE_BIN env var changes (covers test overrides).
+_cached_cmd_base: list[str] | None = None
+_cached_calle_bin_env: str = ""
+
 
 def _find_calle_binary() -> list[str]:
     """
@@ -75,30 +98,49 @@ def _find_calle_binary() -> list[str]:
       ["calle"]
       ["node", "/path/to/calle.js"]
 
+    Result is cached after first resolution so that poll cycles do not
+    re-stat the filesystem or re-run shutil.which on every iteration.
+
     Raises RuntimeError if calle is not found.
     """
-    # 1. Check CALLE_BIN env override
-    calle_bin = os.getenv("CALLE_BIN", "").strip()
-    if calle_bin:
-        return [calle_bin]
+    global _cached_cmd_base, _cached_calle_bin_env
 
-    # 2. Check well-known paths
-    for path in _CALLE_SEARCH_PATHS:
-        if path.exists():
-            if path.suffix == ".js":
-                return ["node", str(path)]
-            return [str(path)]
+    calle_bin_env = os.getenv("CALLE_BIN", "").strip()
+
+    # Return cache unless CALLE_BIN changed (covers test binary overrides)
+    if _cached_cmd_base is not None and calle_bin_env == _cached_calle_bin_env:
+        return _cached_cmd_base
+
+    cmd: list[str] | None = None
+
+    # 1. CALLE_BIN env override
+    if calle_bin_env:
+        cmd = [calle_bin_env]
+
+    # 2. Well-known paths
+    if cmd is None:
+        for path in _CALLE_SEARCH_PATHS:
+            if path.exists():
+                cmd = ["node", str(path)] if path.suffix == ".js" else [str(path)]
+                break
 
     # 3. shutil.which — honours $PATH
-    which = shutil.which("calle")
-    if which:
-        return [which]
+    if cmd is None:
+        which = shutil.which("calle")
+        if which:
+            cmd = [which]
 
-    raise RuntimeError(
-        "calle CLI not found. Install it with:\n"
-        "  npm install -g @call-e/cli\n"
-        "or set CALLE_BIN=/path/to/calle in your environment."
-    )
+    if cmd is None:
+        raise RuntimeError(
+            "calle CLI not found. Install it with:\n"
+            "  npm install -g @call-e/cli\n"
+            "or set CALLE_BIN=/path/to/calle in your environment."
+        )
+
+    _cached_cmd_base = cmd
+    _cached_calle_bin_env = calle_bin_env
+    logger.debug("calle binary resolved and cached: %s", " ".join(cmd))
+    return cmd
 
 
 def _build_env() -> dict[str, str]:
@@ -190,6 +232,11 @@ class RealCallEAdapter:
                 f"calle call start did not return a run_id. Response: {start_raw}"
             )
 
+        # Normalize status: CALL-E CLI may return "NO ANSWER" (space) but the canonical
+        # form used throughout MediCall is "NO_ANSWER" (underscore).
+        current_status = current_status.upper().replace(" ", "_")
+        status_content["status"] = current_status
+
         logger.info("CALL-E call started | run_id=%s status=%s", run_id, current_status)
         print(f"\n▶  CALL-E call started  run_id={run_id}  status={current_status}", flush=True)
 
@@ -202,13 +249,19 @@ class RealCallEAdapter:
             print(f"   → Terminal immediately: {current_status}\n", flush=True)
             return _parse_status_content(run_id, status_content)
 
-        # Step 2: poll until terminal
+        # Step 2: poll until terminal.
+        # First cycle uses POLL_FIRST_SECONDS (2s); subsequent cycles use
+        # POLL_INTERVAL_SECONDS (2s). Both default to 2s but are independently
+        # tunable via env vars for testing or throttling.
         elapsed = 0.0
         last_content = status_content
+        first_poll = True
 
         while elapsed < CALL_TIMEOUT_SECONDS:
-            await asyncio.sleep(POLL_INTERVAL_SECONDS)
-            elapsed += POLL_INTERVAL_SECONDS
+            sleep_for = POLL_FIRST_SECONDS if first_poll else POLL_INTERVAL_SECONDS
+            first_poll = False
+            await asyncio.sleep(sleep_for)
+            elapsed += sleep_for
 
             status_cmd = cmd_base + [
                 "call", "status",
@@ -217,7 +270,8 @@ class RealCallEAdapter:
             ]
             status_raw = await _run_cli(status_cmd, env)
             last_content = status_raw.get("result", {}).get("structuredContent", {})
-            current_status = last_content.get("status", "")
+            current_status = last_content.get("status", "").upper().replace(" ", "_")
+            last_content["status"] = current_status
 
             # Print new activity items since last poll
             seen_activity = _print_activity(last_content, seen_activity)
@@ -229,6 +283,21 @@ class RealCallEAdapter:
 
             if current_status.upper() in CALLE_TERMINAL_STATUSES:
                 break
+
+        if elapsed >= CALL_TIMEOUT_SECONDS and current_status.upper() not in CALLE_TERMINAL_STATUSES:
+            logger.warning(
+                "Call timed out after %.0fs still in status=%s | run_id=%s. "
+                "This typically means CALL-E is rate-limiting the destination number. "
+                "Wait ~45 minutes before retrying the same number.",
+                elapsed, current_status, run_id,
+            )
+            print(
+                f"   ⚠  Timeout after {elapsed:.0f}s — status={current_status}\n"
+                f"   run_id={run_id} was submitted but did not reach a terminal state.\n"
+                f"   If status is PREPARING, CALL-E may be rate-limiting this number.\n"
+                f"   Wait ~45 minutes before retrying.",
+                flush=True,
+            )
 
         logger.info(
             "CALL-E call terminal | run_id=%s status=%s",
@@ -303,8 +372,11 @@ def _parse_status_content(run_id: str, content: dict) -> CallResult:
         },
         activity: [...]
       }
+
+    Status normalisation: the CLI may return "NO ANSWER" (space) while the
+    canonical form used throughout MediCall is "NO_ANSWER" (underscore).
     """
-    status = (content.get("status") or "FAILED").upper()
+    status = (content.get("status") or "FAILED").upper().replace(" ", "_")
     result_block: dict = content.get("result") or {}
 
     transcript: str | None = result_block.get("transcript")
@@ -318,10 +390,10 @@ def _parse_status_content(run_id: str, content: dict) -> CallResult:
     calling: dict = extracted.get("calling") or {}
     duration_seconds: int | None = calling.get("duration_seconds")
 
+    # datetime imported at module level — no per-call import overhead
     started_at = None
     ended_at = None
     try:
-        from datetime import datetime
         if calling.get("started_at"):
             started_at = datetime.fromisoformat(
                 calling["started_at"].replace("Z", "+00:00")
