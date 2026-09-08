@@ -15,22 +15,25 @@ from fastapi.testclient import TestClient
 
 from medicall.api import store as app_store
 from medicall.api.main import app
+from medicall.api.routers.handoffs import _acknowledgements
 from medicall.calle.recorded_adapter import RecordedCallEAdapter
+from medicall.core.models import Appointment, AppointmentSlot
 from medicall.engine.coordinator import CoordinationEngine
 from medicall.engine.handoff import HandoffGenerator
-from medicall.core.models import Appointment, AppointmentSlot
 
 
 @pytest.fixture(autouse=True)
 def clear_store():
-    """Reset shared store between tests."""
+    """Reset all shared state between tests — workflows, handoffs, and acknowledgements."""
     app_store.workflows.clear()
     app_store.appointments.clear()
     app_store.handoffs.clear()
+    _acknowledgements.clear()
     yield
     app_store.workflows.clear()
     app_store.appointments.clear()
     app_store.handoffs.clear()
+    _acknowledgements.clear()
 
 
 @pytest.fixture

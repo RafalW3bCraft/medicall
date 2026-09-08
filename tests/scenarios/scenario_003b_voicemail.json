@@ -1,0 +1,10 @@
+{
+  "run_id": "rec-run-003b",
+  "status": "VOICEMAIL",
+  "result": null,
+  "activity": [
+    {"ts": "00:00:03", "level": "info", "kind": "callee_realtime", "message": "Dialling +15550000001"},
+    {"ts": "00:00:12", "level": "info", "kind": "callee_realtime", "message": "Voicemail system detected"},
+    {"ts": "00:00:13", "level": "info", "kind": "callee_realtime", "message": "Call ended — voicemail"}
+  ]
+}

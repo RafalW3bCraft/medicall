@@ -12,7 +12,6 @@ import re
 
 from medicall.core.models import CallResult
 
-
 # Patterns that must never appear in result fields.
 # Agent deflection phrases ("I'm not in a position to give medical advice",
 # "I can't give medical advice") are intentionally safe — only block

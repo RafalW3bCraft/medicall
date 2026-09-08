@@ -47,7 +47,6 @@ from medicall.core.state_machine import WorkflowState
 from medicall.engine.coordinator import CoordinationEngine
 from medicall.engine.handoff import HandoffGenerator
 
-
 # ── Smoke-test scenarios ───────────────────────────────────────────────────────
 
 @dataclass
@@ -117,6 +116,12 @@ EVAL_CASES: list[EvalCase] = [
         name="010 — Max retries (3 NO_ANSWER → COMPLETED)",
         scenario="scenario_003_no_answer",
         max_retries=3,
+    ),
+    EvalCase(
+        name="011 — Voicemail → flag_for_manual_followup",
+        scenario="scenario_003b_voicemail",
+        max_retries=1,
+        expected_disposition="ROUTINE",
     ),
 ]
 

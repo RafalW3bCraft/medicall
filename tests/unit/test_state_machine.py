@@ -1,7 +1,9 @@
 """Tests for the WorkflowState state machine."""
 from __future__ import annotations
+
 import pytest
-from medicall.core.state_machine import WorkflowState, assert_transition, TERMINAL_STATES
+
+from medicall.core.state_machine import TERMINAL_STATES, WorkflowState, assert_transition
 
 
 def test_valid_transition_created_to_call_pending():

@@ -3,13 +3,13 @@
     "patient_name": "Jane Smith",
     "patient_phone": "+918160094043",
     "clinic_name": "City Medical Centre",
-    "appointment_date": "2026-09-01",
+    "appointment_date": "2026-09-15",
     "appointment_time": "10:00",
     "language": "English",
     "region": "IN",
     "alternative_slots": [
-      {"date": "2026-09-03", "time": "09:00", "label": "Wednesday 3 Sep at 9:00 AM"},
-      {"date": "2026-09-03", "time": "14:30", "label": "Wednesday 3 Sep at 2:30 PM"}
+      {"date": "2026-09-17", "time": "09:00", "label": "Thursday 17 Sep at 9:00 AM"},
+      {"date": "2026-09-19", "time": "14:30", "label": "Saturday 19 Sep at 2:30 PM"}
     ],
     "max_retry_attempts": 3
   },
@@ -17,12 +17,12 @@
     "patient_name": "John Doe",
     "patient_phone": "+918160094043",
     "clinic_name": "City Medical Centre",
-    "appointment_date": "2026-09-01",
+    "appointment_date": "2026-09-15",
     "appointment_time": "11:00",
     "language": "English",
     "region": "IN",
     "alternative_slots": [
-      {"date": "2026-09-04", "time": "10:00", "label": "Thursday 4 Sep at 10:00 AM"}
+      {"date": "2026-09-18", "time": "10:00", "label": "Friday 18 Sep at 10:00 AM"}
     ],
     "max_retry_attempts": 3
   },
@@ -30,13 +30,13 @@
     "patient_name": "Jane Smith",
     "patient_phone": "+918160094043",
     "clinic_name": "City Medical Centre",
-    "appointment_date": "2026-09-01",
+    "appointment_date": "2026-09-15",
     "appointment_time": "14:00",
     "language": "Hindi",
     "region": "IN",
     "alternative_slots": [
-      {"date": "2026-09-03", "time": "10:00", "label": "बुधवार 3 सितम्बर, सुबह 10:00 बजे"},
-      {"date": "2026-09-04", "time": "15:00", "label": "गुरुवार 4 सितम्बर, दोपहर 3:00 बजे"}
+      {"date": "2026-09-17", "time": "10:00", "label": "गुरुवार 17 सितम्बर, सुबह 10:00 बजे"},
+      {"date": "2026-09-18", "time": "15:00", "label": "शुक्रवार 18 सितम्बर, दोपहर 3:00 बजे"}
     ],
     "max_retry_attempts": 3
   }

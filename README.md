@@ -98,19 +98,19 @@ calle auth status   # must show: "usable": true
 
 ### 1. Unit + integration test suite
 
-**46 tests — no real calls, no CALL-E credits used.**
+**48 tests — no real calls, no CALL-E credits used.**
 
 ```bash
 source .venv/bin/activate
 pytest tests/unit/ tests/integration/ -v
 ```
 
-All 46 must pass. What is tested:
+All 48 must pass. What is tested:
 
 | Layer | Count | Covers |
 |---|---|---|
 | Unit | 15 | All 7 policy rules · state machine transitions · result validator |
-| Integration | 31 | CoordinationEngine × 10 scenarios · handoffs router × 8 endpoints |
+| Integration | 33 | CoordinationEngine × 12 scenarios · handoffs router × 8 endpoints |
 
 The acceptance tests in `tests/acceptance/` are skipped by default (require `CALLE_ACCEPTANCE=1`).
 
@@ -118,7 +118,7 @@ The acceptance tests in `tests/acceptance/` are skipped by default (require `CAL
 
 ### 2. Scenario smoke-test
 
-Runs all 10 recorded scenarios through the **production parser** (`_parse_status_content`).
+Runs all 11 recorded scenarios through the **production parser** (`_parse_status_content`).
 Exercises state machine, policy engine, and handoff logic end-to-end.
 **No CALL-E credits used.**
 
@@ -127,7 +127,27 @@ source .venv/bin/activate
 python -m eval.run_eval
 ```
 
-Expected output:
+Each scenario prints a **Call Interaction Summary** to the console, then a pass/fail line:
+
+```
+────────────────────────────────────────────────────────
+  MediCall — Call Interaction Summary
+────────────────────────────────────────────────────────
+  Patient:     Eval Patient  (+15550000099)
+  Clinic:      Eval Clinic
+  Appointment: 2026-08-17 at 10:00
+  run_id:      rec-run-005
+  CALL-E:      COMPLETED
+  Attempts:    1
+  Disposition: HUMAN_REVIEW
+  Action:      route_to_nurse_queue
+  Handoff:     c9f8e74e-473d-43a1-8c6f-cc4c54b2ee17
+────────────────────────────────────────────────────────
+
+✓  005 — New symptom → HUMAN_REVIEW        PASS
+```
+
+Expected final tally:
 ```
 MediCall Eval Harness — Smoke Test (recorded scenarios)
 ──────────────────────────────────────────────────────
@@ -141,39 +161,70 @@ MediCall Eval Harness — Smoke Test (recorded scenarios)
 ✓  008 — Escalation path → HUMAN_REVIEW    PASS
 ✓  009 — Idempotency                       PASS
 ✓  010 — Max retries                       PASS
+✓  011 — Voicemail → flag_for_manual_followup PASS
 ──────────────────────────────────────────────────────
-  10 passed, 0 failed
+  11 passed, 0 failed
 ```
 
 ---
 
-### 3. Single real acceptance call
+### 3. Real acceptance tests
 
-Places **one real CALL-E outbound call** — verifies the full
-`calle call start → calle call status` poll loop end-to-end.
-**Uses 1 CALL-E credit.**
+Places **real CALL-E outbound calls** — verifies the complete production flow
+from `calle call start` through `CoordinationEngine` to final `WorkflowRecord`.
+**Uses CALL-E credits (one per test that actually calls).**
+
+Three tests:
+
+| Test | What it verifies |
+|---|---|
+| `test_calle_binary_found` | calle CLI is locatable — no call placed |
+| `test_real_adapter_single_call` | Adapter + production goal builder → real call → CallResult parsed |
+| `test_real_full_workflow` | CoordinationEngine + RealCallEAdapter → full workflow → WorkflowRecord |
 
 ```bash
 export PATH="$HOME/.npm-global/bin:$PATH"
 calle auth status   # must show usable: true
 
 source .venv/bin/activate
-CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+<your-E.164-number> \
+CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043 \
   pytest tests/acceptance/test_real_adapter.py -v -s
 ```
 
-Expected: **2 passed** — binary located + real call reaches terminal status.
+Expected: **3 passed** — binary located + adapter call + full workflow complete.
 
-**Verified live run:**
+Full workflow console output:
 ```
-run_id:   coRqOh22iCt4JLDhzulrXQ
-status:   COMPLETED
-duration: 7s
-transcript:
-  [00:00:00] BOT:  This is a test call from MediCall,
-  [00:00:00] USER: Hello.
-  [00:00:01] BOT:  a CALL-E hackathon project. test confirmed
-confidence: 0.92 (high)  |  task_completed: True
+▶  Full workflow — calling Jane Smith at +918160094043
+   Clinic: City Medical Centre  |  2026-09-01 10:00
+   Language: English  |  Region: IN
+
+▶  CALL-E call started  run_id=abc123  status=PREPARING
+  [02:42:08] botlab create bot.
+  [02:42:26] calling resolve robot id.
+  [02:42:43] Call is ringing.
+  [02:42:53] Call connected.
+  [02:43:00] Call ended; syncing final Calling result.
+   → Terminal: COMPLETED
+
+────────────────────────────────────────────────────────
+  MediCall — Call Interaction Summary
+────────────────────────────────────────────────────────
+  Patient:     Jane Smith  (+918160094043)
+  Clinic:      City Medical Centre
+  Appointment: 2026-09-01 at 10:00
+  run_id:      abc123
+  CALL-E:      COMPLETED
+  Attempts:    1
+  Disposition: ROUTINE
+  Action:      routine_complete
+  Handoff:     —
+────────────────────────────────────────────────────────
+
+   workflow_id:   wf-uuid
+   calle_status:  COMPLETED
+   disposition:   ROUTINE
+   ✓ Full production workflow acceptance test passed
 ```
 
 > **Note on rate limiting:** CALL-E enforces a per-account daily call quota.
@@ -364,8 +415,9 @@ All tunable via `.env` (copy `.env.example` to `.env`):
 | `POLL_INTERVAL_SECONDS` | `2` | Delay between `calle call status` polls after first |
 | `POLL_FIRST_SECONDS` | `2` | Delay before the very first status poll after `call start` |
 | `CALL_TIMEOUT_SECONDS` | `300` | Hard ceiling per call before adapter gives up |
-| `MAX_RETRY_ATTEMPTS` | `3` | Max no-answer retries per appointment |
+| `MAX_RETRY_ATTEMPTS` | `3` | Max no-answer / voicemail / busy retries per appointment |
 | `CALLE_BIN` | *(auto)* | Override path to `calle` binary if not on `$PATH` |
+| `CALLE_CACHE_ROOT` | *(auto)* | Override CLI token cache root directory (`~/.calle-mcp/cli/`) |
 | `LOG_LEVEL` | `INFO` | Python logging level |
 
 ---
@@ -398,9 +450,9 @@ medicall/
 │           └── handoffs.py      GET/PATCH /handoffs/ — staff review queue
 ├── tests/
 │   ├── unit/                    15 tests: policy rules, state machine, validator
-│   ├── integration/             31 tests: coordinator × 10 scenarios, handoffs router × 8
-│   ├── acceptance/              Real CALL-E call test (CALLE_ACCEPTANCE=1 required)
-│   └── scenarios/               10 real-CALL-E-shaped JSON fixtures
+│   ├── integration/             33 tests: coordinator × 12 scenarios, handoffs router × 8
+│   ├── acceptance/              3 real CALL-E tests (CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043)
+│   └── scenarios/               11 real-CALL-E-shaped JSON fixtures
 ├── eval/
 │   └── run_eval.py              Smoke test + live batch runner
 └── examples/
@@ -425,6 +477,8 @@ while not terminal:
 - **Poll interval:** 2s default — catches terminal status in one round-trip after the call ends
 - **Language:** `--language Hindi` (or any language) passed when `language != "English"`
 - **Timeout warning:** if `PREPARING` persists beyond `CALL_TIMEOUT_SECONDS`, logs a rate-limit warning
+- **Not-reached statuses:** `NO_ANSWER`, `VOICEMAIL`, `BUSY`, `EXPIRED` all retry up to `max_retry_attempts`, then route `ROUTINE → flag_for_manual_followup`
+- **CALLE_CACHE_ROOT:** forwarded to subprocess env if set — overrides CLI token cache directory
 
 ### Safety Boundary — 4 Layers
 
@@ -434,6 +488,30 @@ while not terminal:
 4. **Deterministic policy** — `D = f(R, C, P)` where `D` is always an operational disposition, never a clinical conclusion
 
 **Invariant: the agent collects. Humans decide.**
+
+### Console Call Interaction Summary
+
+After every `engine.run()` — whether called from the API server, the eval harness, or the
+acceptance tests — a structured summary is printed to stdout:
+
+```
+────────────────────────────────────────────────────────
+  MediCall — Call Interaction Summary
+────────────────────────────────────────────────────────
+  Patient:     Jane Smith  (+918160094043)
+  Clinic:      City Medical Centre
+  Appointment: 2026-09-01 at 10:00
+  run_id:      coRqOh22iCt4JLDhzulrXQ
+  CALL-E:      COMPLETED
+  Attempts:    1
+  Disposition: ROUTINE
+  Action:      routine_complete
+  Handoff:     —
+────────────────────────────────────────────────────────
+```
+
+For `HUMAN_REVIEW` or `ESCALATION` outcomes the `Handoff` line shows the UUID of the created
+handoff record — retrieve it via `GET /handoffs/{id}`.
 
 ### Testing Strategy
 

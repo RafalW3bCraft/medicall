@@ -128,9 +128,11 @@ class PolicyEngine:
             )
         return None
 
-    # R06 — No answer after max attempts
+    # R06 — Not reached after max attempts (NO_ANSWER, VOICEMAIL, BUSY, EXPIRED all retry
+    #        and reach this rule only when max_retry_attempts is exhausted)
     def _r06_no_answer_max_attempts(self, result: CallResult) -> PolicyDecision | None:
-        if result.calle_status == "NO_ANSWER":
+        _NOT_REACHED = {"NO_ANSWER", "VOICEMAIL", "BUSY", "EXPIRED"}
+        if result.calle_status in _NOT_REACHED:
             return PolicyDecision(
                 disposition="ROUTINE",
                 triggered_rules=["R06_no_answer_max_attempts"],

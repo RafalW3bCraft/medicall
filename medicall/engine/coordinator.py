@@ -80,6 +80,7 @@ class CoordinationEngine:
             record.error = str(exc)
             record.state = WorkflowState.COMPLETED  # terminal even on error
 
+        _print_call_summary(appointment, record)
         return record
 
     # ─── Internal workflow steps ──────────────────────────────────────────────
@@ -125,15 +126,18 @@ class CoordinationEngine:
                 },
             )
 
-            # Route based on CALL-E terminal status
-            if call_result.calle_status == "NO_ANSWER":
+            # Route based on CALL-E terminal status.
+            # NO_ANSWER, VOICEMAIL, BUSY, and EXPIRED are all "not reached" outcomes
+            # and retry up to max_retry_attempts before flagging for manual follow-up.
+            _NOT_REACHED = {"NO_ANSWER", "VOICEMAIL", "BUSY", "EXPIRED"}
+            if call_result.calle_status in _NOT_REACHED:
                 record = self._transition(record, WorkflowState.NO_ANSWER)
                 if record.attempt_number < appointment.max_retry_attempts:
                     record = self._transition(record, WorkflowState.RETRY_PENDING)
                     record = self._transition(record, WorkflowState.CALL_PENDING)
                     continue
                 else:
-                    # Max retries exhausted — evaluate policy for NO_ANSWER
+                    # Max retries exhausted — evaluate policy for not-reached
                     decision = self.policy_engine.evaluate(call_result)
                     record.policy_decision = decision
                     self._emit(record, EventType.POLICY_EVALUATED,
@@ -230,7 +234,7 @@ class CoordinationEngine:
 
         # Complete workflow
         record = self._transition(record, WorkflowState.COMPLETED)
-        self._emit(record, EventType.WORKFLOW_COMPLETED, {"state": record.state})
+        self._emit(record, EventType.WORKFLOW_COMPLETED, {"state": record.state.value})
         return record
 
     # ─── Helpers ──────────────────────────────────────────────────────────────
@@ -259,3 +263,43 @@ class CoordinationEngine:
                 payload=payload,
             )
         )
+
+
+# ── Console call summary ───────────────────────────────────────────────────────
+
+def _print_call_summary(appointment: Appointment, record: WorkflowRecord) -> None:
+    """
+    Print a structured summary of a completed coordination workflow to stdout.
+
+    Emitted once after every engine.run() — for both the API server and the
+    eval harness — so operators can trace the full outcome at a glance without
+    digging through logs.
+    """
+    decision = record.policy_decision
+    call_result = record.call_result
+
+    run_id = call_result.run_id if call_result else "—"
+    calle_status = call_result.calle_status if call_result else "—"
+    disposition = decision.disposition if decision else "—"
+    action = decision.workflow_action if decision else "—"
+    handoff = record.handoff_id or "—"
+    error = record.error or "—"
+
+    divider = "─" * 56
+    print(f"\n{divider}", flush=True)
+    print("  MediCall — Call Interaction Summary", flush=True)
+    print(divider, flush=True)
+    print(f"  Patient:     {appointment.patient_name}  ({appointment.patient_phone})", flush=True)
+    print(f"  Clinic:      {appointment.clinic_name}", flush=True)
+    appt_when = f"{appointment.appointment_date} at {appointment.appointment_time}"
+    print(f"  Appointment: {appt_when}", flush=True)
+    print(f"  run_id:      {run_id}", flush=True)
+    print(f"  CALL-E:      {calle_status}", flush=True)
+    print(f"  Attempts:    {record.attempt_number}", flush=True)
+    print(f"  Disposition: {disposition}", flush=True)
+    print(f"  Action:      {action}", flush=True)
+    print(f"  Handoff:     {handoff}", flush=True)
+    if record.error:
+        print(f"  Error:       {error}", flush=True)
+    print(divider, flush=True)
+    print("", flush=True)

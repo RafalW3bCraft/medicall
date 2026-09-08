@@ -8,10 +8,10 @@ CALL-E result codes and PolicyEngine output only.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class WorkflowState(str, Enum):
+class WorkflowState(StrEnum):
     """All possible states of an appointment coordination workflow."""
 
     CREATED = "CREATED"

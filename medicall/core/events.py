@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     APPOINTMENT_CREATED = "AppointmentCreated"
     CALL_REQUESTED = "CallRequested"
     CALL_STARTED = "CallStarted"
@@ -36,7 +36,7 @@ class Event:
     appointment_id: str
     payload: dict[str, Any]
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    occurred_at: datetime = field(default_factory=datetime.utcnow)
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class InMemoryEventStore:

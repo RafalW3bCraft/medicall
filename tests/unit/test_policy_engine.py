@@ -1,7 +1,9 @@
 """Tests for the PolicyEngine — all 8 rules."""
 from __future__ import annotations
+
 import pytest
-from medicall.core.models import CallResult, IntakeResult, PatientReport, AppointmentSlot
+
+from medicall.core.models import AppointmentSlot, CallResult, IntakeResult, PatientReport
 from medicall.engine.policy import PolicyEngine
 
 

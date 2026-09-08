@@ -40,11 +40,11 @@ Console activity:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
 import json
 import logging
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 from medicall.core.models import (
@@ -144,9 +144,18 @@ def _find_calle_binary() -> list[str]:
 
 
 def _build_env() -> dict[str, str]:
-    """Build the subprocess environment with CALL-E attribution vars."""
+    """
+    Build the subprocess environment with CALL-E attribution vars.
+
+    If CALLE_CACHE_ROOT is set, it is forwarded to the subprocess so the
+    CLI uses the specified token cache directory instead of the default
+    (~/.calle-mcp/cli/).
+    """
     env = os.environ.copy()
     env.update(_CALLE_ENV)
+    cache_root = os.getenv("CALLE_CACHE_ROOT", "").strip()
+    if cache_root:
+        env["CALLE_CACHE_ROOT"] = cache_root
     return env
 
 
@@ -284,7 +293,8 @@ class RealCallEAdapter:
             if current_status.upper() in CALLE_TERMINAL_STATUSES:
                 break
 
-        if elapsed >= CALL_TIMEOUT_SECONDS and current_status.upper() not in CALLE_TERMINAL_STATUSES:
+        timed_out = elapsed >= CALL_TIMEOUT_SECONDS
+        if timed_out and current_status.upper() not in CALLE_TERMINAL_STATUSES:
             logger.warning(
                 "Call timed out after %.0fs still in status=%s | run_id=%s. "
                 "This typically means CALL-E is rate-limiting the destination number. "

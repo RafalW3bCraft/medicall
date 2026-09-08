@@ -8,13 +8,13 @@ PATCH /handoffs/{handoff_id}/acknowledge — staff acknowledges a handoff
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from medicall.api import store as app_store
-from medicall.core.models import EvidenceItem, Handoff, PatientReport
+from medicall.core.models import Handoff
 
 router = APIRouter()
 
@@ -143,7 +143,7 @@ async def acknowledge_handoff(
 
     _acknowledgements[handoff_id] = {
         "acknowledged_by": body.acknowledged_by,
-        "acknowledged_at": datetime.now(tz=timezone.utc),
+        "acknowledged_at": datetime.now(tz=UTC),
     }
     return _to_detail(handoff)
 

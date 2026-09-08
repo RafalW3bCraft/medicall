@@ -1,7 +1,9 @@
 """Tests for the ResultValidator — schema and semantic boundary checks."""
 from __future__ import annotations
+
 import pytest
-from medicall.core.models import CallResult, IntakeResult, PatientReport
+
+from medicall.core.models import CallResult, IntakeResult
 from medicall.engine.validator import ResultValidator
 
 
@@ -22,7 +24,8 @@ def test_clean_transcript_passes(validator):
 
 
 def test_diagnosis_in_transcript_fails(validator):
-    result = _result_with_transcript("The agent said: this sounds like acid reflux, diagnosis confirmed.")
+    transcript = "The agent said: this sounds like acid reflux, diagnosis confirmed."
+    result = _result_with_transcript(transcript)
     ok, err = validator.validate(result)
     assert ok is False
     assert "diagnosis" in err.lower() or err is not None

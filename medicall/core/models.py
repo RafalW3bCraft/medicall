@@ -9,13 +9,12 @@ enforced at the schema level — they must never appear in any result.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from medicall.core.state_machine import WorkflowState
-
 
 # ─── Appointment ──────────────────────────────────────────────────────────────
 
@@ -40,7 +39,7 @@ class Appointment(BaseModel):
     region: str | None = None
     alternative_slots: list[AppointmentSlot] = Field(default_factory=list)
     max_retry_attempts: int = 3
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ─── CALL-E task / result ─────────────────────────────────────────────────────
@@ -193,7 +192,7 @@ class Handoff(BaseModel):
     evidence: list[EvidenceItem]
     transcript_excerpt: str | None = None
     requires_acknowledgment: bool
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ─── Workflow record ──────────────────────────────────────────────────────────
@@ -209,5 +208,5 @@ class WorkflowRecord(BaseModel):
     policy_decision: PolicyDecision | None = None
     handoff_id: str | None = None
     error: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

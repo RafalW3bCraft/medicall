@@ -6,7 +6,9 @@ CALL-E structuredContent shape, parsed through the production parser.
 No real CALL-E calls are made.
 """
 from __future__ import annotations
+
 import pytest
+
 from medicall.calle.recorded_adapter import RecordedCallEAdapter
 from medicall.core.events import InMemoryEventStore
 from medicall.core.models import Appointment, AppointmentSlot
@@ -171,6 +173,43 @@ async def test_scenario_010_max_retries():
     assert record.state == WorkflowState.COMPLETED
     # Should have retried up to max_retry_attempts times
     assert adapter.call_count == 3
+
+
+# ── Scenario 003b: Voicemail → retry → COMPLETED with flag ───────────────────
+
+@pytest.mark.asyncio
+async def test_scenario_003b_voicemail():
+    """
+    VOICEMAIL is treated identically to NO_ANSWER: retry up to max_retry_attempts,
+    then flag for manual follow-up. State machine transitions through NO_ANSWER
+    (not CONNECTED), so no intake is attempted.
+    """
+    adapter = RecordedCallEAdapter(scenario="scenario_003b_voicemail")
+    store = InMemoryEventStore()
+    engine = CoordinationEngine(phone_port=adapter, event_store=store)
+
+    record = await engine.run(_make_appointment(max_retry_attempts=1))
+    assert record.state == WorkflowState.COMPLETED
+    assert record.call_result.calle_status == "VOICEMAIL"
+    assert record.policy_decision.disposition == "ROUTINE"
+    assert record.policy_decision.workflow_action == "flag_for_manual_followup"
+    assert record.policy_decision.triggered_rules == ["R06_no_answer_max_attempts"]
+    assert record.error is None
+
+
+@pytest.mark.asyncio
+async def test_scenario_003b_voicemail_retries():
+    """
+    VOICEMAIL retries up to max_retry_attempts (3) before completing.
+    """
+    adapter = RecordedCallEAdapter(scenario="scenario_003b_voicemail")
+    store = InMemoryEventStore()
+    engine = CoordinationEngine(phone_port=adapter, event_store=store)
+
+    record = await engine.run(_make_appointment(max_retry_attempts=3))
+    assert record.state == WorkflowState.COMPLETED
+    assert adapter.call_count == 3
+    assert record.policy_decision.workflow_action == "flag_for_manual_followup"
 
 
 # ── Hindi language: goal prefix ───────────────────────────────────────────────
