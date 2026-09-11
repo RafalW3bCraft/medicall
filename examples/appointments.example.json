@@ -1,6 +1,6 @@
 [
   {
-    "patient_name": "Jane Smith",
+    "patient_name": "Mr. Patient",
     "patient_phone": "+918160094043",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-15",
@@ -14,8 +14,8 @@
     "max_retry_attempts": 3
   },
   {
-    "patient_name": "John Doe",
-    "patient_phone": "+918160094043",
+    "patient_name": "Mr.",
+    "patient_phone": "+91",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-15",
     "appointment_time": "11:00",
@@ -27,8 +27,8 @@
     "max_retry_attempts": 3
   },
   {
-    "patient_name": "Jane Smith",
-    "patient_phone": "+918160094043",
+    "patient_name": "Mr.",
+    "patient_phone": "+91",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-15",
     "appointment_time": "14:00",
