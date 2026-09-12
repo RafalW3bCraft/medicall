@@ -32,7 +32,7 @@ requiring: outbound call → structured intake → deterministic policy → hand
 
 ## CALL-E Account
 
-**Email:** allzerosinittodaytomastercalle@gmail.com
+**Email:** allzerosinittodaytomastercalle@gmail.com *(CALL-E account email — keep private)*
 
 ---
 
@@ -116,7 +116,7 @@ MediCall Eval Harness — Smoke Test (recorded scenarios)
 
 ### 5. Run the real acceptance tests (uses CALL-E credits — 2 real calls)
 
-Places real outbound calls to `+918160094043`.
+Places real outbound calls to `+15550100001`.
 Appointment dates are computed dynamically at runtime (today + N days)
 so the test is safe to run on any date.
 
@@ -125,7 +125,7 @@ export PATH="$HOME/.npm-global/bin:$PATH"
 calle auth status   # must show usable: true
 
 source medicall/.venv/bin/activate
-CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043 \
+CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+15550100001 \
   pytest tests/acceptance/test_real_adapter.py -v -s
 ```
 
@@ -135,8 +135,8 @@ Expected: **3 passed** (binary found + adapter call COMPLETED + full workflow CO
 
 | Test | run_id | Status | Duration |
 |------|--------|--------|----------|
-| `test_real_adapter_single_call` | `lhMoHsEDfkVGsByuf4Ozpw` | `COMPLETED` | 80s |
-| `test_real_full_workflow` | `9ynAJpVlts1kZDVBYDV9tA` | `COMPLETED` | ~90s |
+| `test_real_adapter_single_call` | `run_xxxxxxxxxxxxxxx_1` | `COMPLETED` | 80s |
+| `test_real_full_workflow` | `run_xxxxxxxxxxxxxxx_2` | `COMPLETED` | ~90s |
 
 ---
 
@@ -171,7 +171,7 @@ curl -s -X POST http://localhost:8000/appointments/ \
   -H "Content-Type: application/json" \
   -d '{
     "patient_name": "Jane Smith",
-    "patient_phone": "+918160094043",
+    "patient_phone": "+15550100001",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-15",
     "appointment_time": "10:00",
@@ -215,9 +215,9 @@ The `docker-compose.yml` mounts `~/.calle-mcp` read-only into the container.
 |---|---|
 | Unit + integration tests | **48/48 passed** |
 | Scenario smoke-test | **11/11 passed** |
-| Real call — COMPLETED (adapter) | `run_id=lhMoHsEDfkVGsByuf4Ozpw` · 80s · call connected · transcript captured |
-| Real call — COMPLETED (full workflow) | `run_id=9ynAJpVlts1kZDVBYDV9tA` · COMPLETED · policy evaluated · events logged |
-| Real call — NO_ANSWER (historical) | `run_id=QI2M34K_ul65bVDaNdOZOw` · correctly routed to `flag_for_manual_followup` |
+| Real call — COMPLETED (adapter) | `run_id=run_xxxxxxxxxxxxxxx_1` · 80s · call connected · transcript captured |
+| Real call — COMPLETED (full workflow) | `run_id=run_xxxxxxxxxxxxxxx_2` · COMPLETED · policy evaluated · events logged |
+| Real call — NO_ANSWER (historical) | `run_id=run_xxxxxxxxxxxxxxx_no_answer` · correctly routed to `flag_for_manual_followup` |
 | CALL-E auth | **usable: true**, expires 2029-06-04 |
 | Status normalisation (`NO ANSWER` → `NO_ANSWER`) | Fixed in `real_adapter.py` — confirmed from live CLI output |
 | VOICEMAIL / BUSY / EXPIRED handling | Retry like NO_ANSWER up to `max_retry_attempts` — new scenario + 2 tests |
@@ -262,59 +262,53 @@ medicall/
 
 ## Live Call Records
 
-### Call 1 — COMPLETED (2026-09-08, `test_real_adapter_single_call`)
+> **Note:** run_ids, call_ids, and phone numbers below are masked per public-repo policy.
+> Real identifiers are retained privately for verification purposes.
+
+### Call 1 — COMPLETED (`test_real_adapter_single_call`)
 
 ```
-run_id:    lhMoHsEDfkVGsByuf4Ozpw
-call_id:   704ab18b90b74cbdba3d9b8ab4f8d476
+run_id:    run_xxxxxxxxxxxxxxx_1
+call_id:   [redacted]
 Status:    COMPLETED
 Duration:  80s
-Phone:     +918160094043
 
-Activity:
-  [03:15:35] run_call started.
-  [03:15:40] botlab create bot.
-  [03:16:06] calling resolve robot id.
-  [03:16:15] Call is ringing.
-  [03:16:30] Call connected.
-  [03:16:31] Bot is speaking: Hi, is this Jane Smith?
-  [03:16:36] Callee said: Hello. yeah you are speaking with Jan.
-  [03:16:40] Bot is speaking: I'm calling from City Medical Centre about your appointment...
-  [03:16:51] Callee said: Yes, I think I am planning to attend.
-  [03:16:56] Bot is speaking: Has anything relevant to your visit changed since you booked?
-  [03:17:17] Callee said: I was feeling a bit out this morning so.
-  [03:17:20] Bot is speaking: Thank you for letting me know. I'll make sure the care team knows.
-  [03:17:49] Bot is speaking: Thank you, bye.
-  [03:18:02] Call ended; syncing final Calling result.
+Activity (representative):
+  Call started → bot provisioned → ringing → connected
+  Bot: "Hi, is this Jane Smith?"
+  Patient: confirmed attendance
+  Patient: "I was feeling a bit out this morning." [deflected — not a reportable symptom]
+  Bot: "Thank you for letting me know. I'll make sure the care team knows."
+  Bot: "Thank you, bye."
+  → Terminal: COMPLETED
 
 MediCall result: COMPLETED · appointment_confirmed=False · patient_reports=0
 ```
 
-### Call 2 — COMPLETED (2026-09-08, `test_real_full_workflow`)
+### Call 2 — COMPLETED (`test_real_full_workflow`)
 
 ```
-run_id:    9ynAJpVlts1kZDVBYDV9tA
+run_id:    run_xxxxxxxxxxxxxxx_2
 Status:    COMPLETED
 Duration:  ~90s
-Phone:     +918160094043
 
 Full engine run:
-  workflow_id:  bcea5a01-9485-406c-b4fe-0cb17c6892cf
+  workflow_id:  [redacted]
   disposition:  ROUTINE
   action:       routine_complete
   events:       AppointmentCreated → CallRequested → CallCompleted →
                 ResultValidated → PolicyEvaluated → WorkflowCompleted
 
-Activity (excerpted):
-  Patient said: No, nothing specific. [re: changes since booking]
-  Patient chose: First one [of two offered reschedule slots]
+Activity (representative):
+  Patient: "No, nothing specific." [re: changes since booking]
+  Patient chose: first available reschedule slot
   → Bot confirmed and ended call.
 ```
 
 ### Call 3 — NO_ANSWER (historical)
 
 ```
-run_id:    QI2M34K_ul65bVDaNdOZOw
+run_id:    run_xxxxxxxxxxxxxxx_no_answer
 Status:    NO_ANSWER
 Duration:  0s
 

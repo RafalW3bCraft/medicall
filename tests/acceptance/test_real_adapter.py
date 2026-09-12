@@ -5,10 +5,10 @@ These tests place REAL outbound phone calls via the `calle` CLI.
 They are SKIPPED by default and ONLY run when both env vars are set:
 
     CALLE_ACCEPTANCE=1
-    ACCEPTANCE_PHONE=+918160094043
+    ACCEPTANCE_PHONE=+15550100001
 
 Run with:
-    CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043 \\
+    CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+15550100001 \\
         pytest tests/acceptance/test_real_adapter.py -v -s
 
 Requirements:
@@ -73,7 +73,7 @@ pytestmark = pytest.mark.skipif(
     not ACCEPTANCE_ENABLED or not ACCEPTANCE_PHONE,
     reason=(
         "Acceptance test skipped. "
-        "Set CALLE_ACCEPTANCE=1 and ACCEPTANCE_PHONE=+918160094043 to run."
+        "Set CALLE_ACCEPTANCE=1 and ACCEPTANCE_PHONE=+15550100001 to run."
     ),
 )
 
@@ -119,7 +119,7 @@ def _real_appointment() -> Appointment:
         appointment_date=appt_date,
         appointment_time="10:00",
         language="English",
-        region="IN",
+        region="US",
         alternative_slots=[
             AppointmentSlot(
                 date=alt1_date,

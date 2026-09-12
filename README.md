@@ -141,7 +141,7 @@ Each scenario prints a **Call Interaction Summary** to the console, then a pass/
   Attempts:    1
   Disposition: HUMAN_REVIEW
   Action:      route_to_nurse_queue
-  Handoff:     c9f8e74e-473d-43a1-8c6f-cc4c54b2ee17
+  Handoff:     00000000-0000-0000-0000-000000000000
 ────────────────────────────────────────────────────────
 
 ✓  005 — New symptom → HUMAN_REVIEW        PASS
@@ -187,7 +187,7 @@ export PATH="$HOME/.npm-global/bin:$PATH"
 calle auth status   # must show usable: true
 
 source .venv/bin/activate
-CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043 \
+CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+15550100001 \
   pytest tests/acceptance/test_real_adapter.py -v -s
 ```
 
@@ -195,7 +195,7 @@ Expected: **3 passed** — binary located + adapter call + full workflow complet
 
 Full workflow console output:
 ```
-▶  Full workflow — calling Jane Smith at +918160094043
+▶  Full workflow — calling Jane Smith at +15550100001
    Clinic: City Medical Centre  |  2026-09-01 10:00
    Language: English  |  Region: IN
 
@@ -210,7 +210,7 @@ Full workflow console output:
 ────────────────────────────────────────────────────────
   MediCall — Call Interaction Summary
 ────────────────────────────────────────────────────────
-  Patient:     Jane Smith  (+918160094043)
+  Patient:     Jane Smith  (+15550100001)
   Clinic:      City Medical Centre
   Appointment: 2026-09-01 at 10:00
   run_id:      abc123
@@ -259,7 +259,7 @@ The example file contains 3 appointments (English × 2, Hindi × 1):
 
 Console output per call:
 ```
-[1/3] Jane Smith  +918160094043
+[1/3] Jane Smith  +15550100001
      Clinic: City Medical Centre  Appointment: 2026-09-01 10:00
 ────────────────────────────────────────────────────────────
 ▶  CALL-E call started  run_id=abc123  status=PREPARING
@@ -281,7 +281,7 @@ Console output per call:
 ```json
 {
   "patient_name":      "Jane Smith",
-  "patient_phone":     "+918160094043",
+  "patient_phone":     "+15550100001",
   "clinic_name":       "City Medical Centre",
   "appointment_date":  "2026-09-01",
   "appointment_time":  "10:00",
@@ -328,7 +328,7 @@ curl -s -X POST http://localhost:8000/appointments/ \
   -H "Content-Type: application/json" \
   -d '{
     "patient_name": "Jane Smith",
-    "patient_phone": "+918160094043",
+    "patient_phone": "+15550100001",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-01",
     "appointment_time": "10:00",
@@ -347,7 +347,7 @@ curl -s -X POST http://localhost:8000/appointments/ \
   -H "Content-Type: application/json" \
   -d '{
     "patient_name": "Jane Smith",
-    "patient_phone": "+918160094043",
+    "patient_phone": "+15550100001",
     "clinic_name": "City Medical Centre",
     "appointment_date": "2026-09-01",
     "appointment_time": "14:00",
@@ -451,7 +451,7 @@ medicall/
 ├── tests/
 │   ├── unit/                    15 tests: policy rules, state machine, validator
 │   ├── integration/             33 tests: coordinator × 12 scenarios, handoffs router × 8
-│   ├── acceptance/              3 real CALL-E tests (CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043)
+│   ├── acceptance/              3 real CALL-E tests (CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+15550100001)
 │   └── scenarios/               11 real-CALL-E-shaped JSON fixtures
 ├── eval/
 │   └── run_eval.py              Smoke test + live batch runner
@@ -498,10 +498,10 @@ acceptance tests — a structured summary is printed to stdout:
 ────────────────────────────────────────────────────────
   MediCall — Call Interaction Summary
 ────────────────────────────────────────────────────────
-  Patient:     Jane Smith  (+918160094043)
+  Patient:     Jane Smith  (+15550100001)
   Clinic:      City Medical Centre
   Appointment: 2026-09-01 at 10:00
-  run_id:      coRqOh22iCt4JLDhzulrXQ
+  run_id:      run_xxxxxxxxxxxxxxxxxxxxxxx
   CALL-E:      COMPLETED
   Attempts:    1
   Disposition: ROUTINE
@@ -527,7 +527,7 @@ only the transport layer (subprocess vs. fixture file) differs.
 - **Contribution area:** Agent Skills
 - **PR target:** `github.com/CALLE-AI/awesome-phone-call-agents`
 - **Skill file:** [`SKILL.md`](./SKILL.md) — reusable `pre-arrival-coordination` pattern
-- **Account email:** `allzerosinittodaytomastercalle@gmail.com`
+- **Account email:** *(provided in submission)*
 
 See [`submission.md`](./submission.md) for the full submission checklist and live call records.  
 See [`presentation.md`](./presentation.md) for judging criteria answers.

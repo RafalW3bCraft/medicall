@@ -111,8 +111,8 @@ Two real outbound calls were placed during development and testing:
 
 | run_id | Status | Notes |
 |--------|--------|-------|
-| `QI2M34K_ul65bVDaNdOZOw` | `NO_ANSWER` | First acceptance run — discovered `"NO ANSWER"` status format; bug fixed |
-| `coRqOh22iCt4JLDhzulrXQ` | `COMPLETED` | Second acceptance run — call connected, bot spoke, callee responded, transcript captured; **81s end-to-end** |
+| `run_xxxxxxxxxxxxxxx_no_answer` | `NO_ANSWER` | First acceptance run — discovered `"NO ANSWER"` status format; bug fixed |
+| `run_xxxxxxxxxxxxxxx_1` | `COMPLETED` | Second acceptance run — call connected, bot spoke, callee responded, transcript captured; **81s end-to-end** |
 
 ### Test Suite
 
@@ -120,7 +120,7 @@ Two real outbound calls were placed during development and testing:
 |---|---|---|
 | Unit | 15 | Policy engine (7 rules), state machine, result validator |
 | Integration | 33 | CoordinationEngine × 12 scenarios (incl. voicemail + Hindi), handoffs router × 8 |
-| Acceptance | 3 | Real CALL-E calls — `CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043` |
+| Acceptance | 3 | Real CALL-E calls — `CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=<your-number>` |
 | Smoke eval | 11 | All recorded scenarios via `python -m eval.run_eval` |
 
 **Total: 48 unit+integration, 11 eval, 3 acceptance — all pass.**
@@ -129,8 +129,8 @@ Two real outbound calls were placed during development and testing:
 
 | Test | run_id | Status | Duration |
 |---|---|---|---|
-| `test_real_adapter_single_call` | `lhMoHsEDfkVGsByuf4Ozpw` | `COMPLETED` | 80s |
-| `test_real_full_workflow` | `9ynAJpVlts1kZDVBYDV9tA` | `COMPLETED` | ~90s |
+| `test_real_adapter_single_call` | `run_xxxxxxxxxxxxxxx_1` | `COMPLETED` | 80s |
+| `test_real_full_workflow` | `run_xxxxxxxxxxxxxxx_2` | `COMPLETED` | ~90s |
 
 ### Architecture Highlights
 
