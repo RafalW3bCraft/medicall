@@ -36,6 +36,12 @@ requiring: outbound call → structured intake → deterministic policy → hand
 
 ---
 
+## Demo Video
+
+See `demo-video/` directory.
+
+---
+
 ## How to Set Up and Run
 
 ### Requirements
@@ -49,10 +55,10 @@ requiring: outbound call → structured intake → deterministic policy → hand
 ### 1. Clone and install
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/RafalW3bCraft/medicall.git
 cd medicall
 
-uv venv && source .venv/bin/activate
+uv venv medicall/.venv && source medicall/.venv/bin/activate
 uv pip install -e ".[dev]"
 ```
 
@@ -72,18 +78,18 @@ calle auth status   # must show usable: true
 ### 3. Run the unit and integration test suite (no real calls, no credits)
 
 ```bash
-source .venv/bin/activate
+source medicall/.venv/bin/activate
 pytest tests/unit/ tests/integration/ -v
 ```
 
-Expected: **46 passed**
+Expected: **48 passed**
 
 ---
 
 ### 4. Run the scenario smoke-test (no real calls, no credits)
 
 ```bash
-source .venv/bin/activate
+source medicall/.venv/bin/activate
 python -m eval.run_eval
 ```
 
@@ -101,28 +107,36 @@ MediCall Eval Harness — Smoke Test (recorded scenarios)
 ✓  008 — Escalation path → HUMAN_REVIEW    PASS
 ✓  009 — Idempotency                       PASS
 ✓  010 — Max retries                       PASS
+✓  011 — Voicemail → flag_for_manual_followup PASS
 ──────────────────────────────────────────────────────
-  10 passed, 0 failed
+  11 passed, 0 failed
 ```
 
 ---
 
-### 5. Run a real acceptance test (uses 1 CALL-E credit)
+### 5. Run the real acceptance tests (uses CALL-E credits — 2 real calls)
 
-Places a real outbound call to the number in the env var.
-Verified working against `+918160094043` — live call completed in 81 seconds,
-`run_id=coRqOh22iCt4JLDhzulrXQ`, `calle_status=COMPLETED`.
+Places real outbound calls to `+918160094043`.
+Appointment dates are computed dynamically at runtime (today + N days)
+so the test is safe to run on any date.
 
 ```bash
 export PATH="$HOME/.npm-global/bin:$PATH"
 calle auth status   # must show usable: true
 
-source .venv/bin/activate
+source medicall/.venv/bin/activate
 CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043 \
   pytest tests/acceptance/test_real_adapter.py -v -s
 ```
 
-Expected: **2 passed** (binary found + real call COMPLETED)
+Expected: **3 passed** (binary found + adapter call COMPLETED + full workflow COMPLETED)
+
+**Verified live runs — 2026-09-08:**
+
+| Test | run_id | Status | Duration |
+|------|--------|--------|----------|
+| `test_real_adapter_single_call` | `lhMoHsEDfkVGsByuf4Ozpw` | `COMPLETED` | 80s |
+| `test_real_full_workflow` | `9ynAJpVlts1kZDVBYDV9tA` | `COMPLETED` | ~90s |
 
 ---
 
@@ -132,28 +146,12 @@ Expected: **2 passed** (binary found + real call COMPLETED)
 export PATH="$HOME/.npm-global/bin:$PATH"
 calle auth status
 
-source .venv/bin/activate
+source medicall/.venv/bin/activate
 python -m eval.run_eval --csv examples/appointments.example.json
 ```
 
-Reads `examples/appointments.example.json`, calls each patient, and prints
-live activity events to the console:
-
-```
-[1/3] Jane Smith  +918160094043
-     Clinic: City Medical Centre  Appointment: 2026-09-01 10:00
-────────────────────────────────────────────────────────────
-▶  CALL-E call started  run_id=abc123  status=PREPARING
-  [00:00:03] Call connected
-  [00:00:35] Patient confirmed appointment
-  [00:00:42] Call completed
-   → Terminal: COMPLETED
-
-   State:       COMPLETED
-   CALL-E:      COMPLETED
-   Disposition: ROUTINE
-   Action:      routine_complete
-```
+Reads `examples/appointments.example.json` (3 appointments: English × 2, Hindi × 1),
+calls each patient, and prints live activity events and a call summary to the console.
 
 ---
 
@@ -163,7 +161,7 @@ live activity events to the console:
 export PATH="$HOME/.npm-global/bin:$PATH"
 calle auth status
 
-source .venv/bin/activate
+source medicall/.venv/bin/activate
 uvicorn medicall.api.main:app --reload
 ```
 
@@ -175,10 +173,14 @@ curl -s -X POST http://localhost:8000/appointments/ \
     "patient_name": "Jane Smith",
     "patient_phone": "+918160094043",
     "clinic_name": "City Medical Centre",
-    "appointment_date": "2026-09-01",
+    "appointment_date": "2026-09-15",
     "appointment_time": "10:00",
     "language": "English",
-    "region": "IN"
+    "region": "IN",
+    "alternative_slots": [
+      {"date": "2026-09-17", "time": "09:00", "label": "Thursday 17 Sep at 9:00 AM"},
+      {"date": "2026-09-19", "time": "14:30", "label": "Saturday 19 Sep at 2:30 PM"}
+    ]
   }' | python3 -m json.tool
 ```
 
@@ -211,14 +213,20 @@ The `docker-compose.yml` mounts `~/.calle-mcp` read-only into the container.
 
 | Check | Result |
 |---|---|
-| Unit + integration tests | **46/46 passed** |
-| Scenario smoke-test | **10/10 passed** |
-| Real call — COMPLETED | `run_id=coRqOh22iCt4JLDhzulrXQ` · 7s · transcript captured · task_completed=True · confidence=0.92 high |
-| Real call — NO_ANSWER | `run_id=QI2M34K_ul65bVDaNdOZOw` · correctly parsed, policy routed to `flag_for_manual_followup` |
-| CALL-E auth | **usable: true**, expires 2029-05-10 |
-| Status normalisation (`NO ANSWER` → `NO_ANSWER`) | **Fixed** in `real_adapter.py` — confirmed from live CLI output |
-| Poll interval | **2s** (reduced from 10s) — binary path cached; `datetime` at module level |
-| Rate limiting resilience | Timeout message + warning log when CALL-E provisioning stalls (`PREPARING` > 300s) |
+| Unit + integration tests | **48/48 passed** |
+| Scenario smoke-test | **11/11 passed** |
+| Real call — COMPLETED (adapter) | `run_id=lhMoHsEDfkVGsByuf4Ozpw` · 80s · call connected · transcript captured |
+| Real call — COMPLETED (full workflow) | `run_id=9ynAJpVlts1kZDVBYDV9tA` · COMPLETED · policy evaluated · events logged |
+| Real call — NO_ANSWER (historical) | `run_id=QI2M34K_ul65bVDaNdOZOw` · correctly routed to `flag_for_manual_followup` |
+| CALL-E auth | **usable: true**, expires 2029-06-04 |
+| Status normalisation (`NO ANSWER` → `NO_ANSWER`) | Fixed in `real_adapter.py` — confirmed from live CLI output |
+| VOICEMAIL / BUSY / EXPIRED handling | Retry like NO_ANSWER up to `max_retry_attempts` — new scenario + 2 tests |
+| Past-date guard (`plan_not_ready`) | Acceptance test dates are dynamic (today + N days) — never fails due to date |
+| Poll interval | **2s** — binary path cached; `datetime` at module level |
+| Rate limiting resilience | Timeout message + warning log when `PREPARING` > `CALL_TIMEOUT_SECONDS` |
+| `CALLE_CACHE_ROOT` | Forwarded to subprocess env when set |
+| Python 3.13 compatibility | All `datetime.utcnow()` replaced with `datetime.now(UTC)` |
+| Ruff lint | **0 errors** — `ruff check medicall/ tests/ eval/` clean |
 
 ---
 
@@ -230,8 +238,9 @@ medicall/
 ├── README.md                 ← Full setup and usage documentation
 ├── submission.md             ← This file
 ├── presentation.md           ← Judging criteria answers
+├── demo-video/               ← Demo video
 ├── examples/
-│   └── appointments.example.json   ← Live batch runner input format
+│   └── appointments.example.json   ← Live batch runner input (3 appointments)
 ├── medicall/
 │   ├── calle/
 │   │   ├── real_adapter.py   ← CALL-E CLI subprocess integration (production)
@@ -242,89 +251,76 @@ medicall/
 │   └── api/                  ← FastAPI server (appointments + handoffs routers)
 ├── tests/
 │   ├── unit/                 ← 15 unit tests (policy, state machine, validator)
-│   ├── integration/          ← 31 integration tests (coordinator, handoffs router)
-│   ├── acceptance/           ← Real CALL-E call test (CALLE_ACCEPTANCE=1 required)
-│   └── scenarios/            ← 10 real-CALL-E-shaped JSON fixtures
+│   ├── integration/          ← 33 integration tests (coordinator × 12, handoffs router × 8)
+│   ├── acceptance/           ← 3 real CALL-E tests (CALLE_ACCEPTANCE=1 required)
+│   └── scenarios/            ← 11 real-CALL-E-shaped JSON fixtures
 └── eval/
-    └── run_eval.py           ← Smoke test + live batch runner
+    └── run_eval.py           ← Smoke test (11 scenarios) + live batch runner
 ```
 
 ---
 
-## Live Call Record
+## Live Call Records
 
-### Call 1 — COMPLETED (`run_id=coRqOh22iCt4JLDhzulrXQ`)
-
-```
-Status:       COMPLETED
-Call ID:      0a042794a6ab408ca84d036307670fc6
-Duration:     7s
-Started:      2026-09-01 02:42:52 UTC-4
-Ended:        2026-09-01 02:42:59 UTC-4
-
-Post Summary:
-  The test call connected, the required MediCall test phrase was delivered,
-  and the call ended successfully.
-
-Outcome:
-  task_completed: True  |  confidence: 0.92 (high)
-  evidence:
-    - The callee answered the call.
-    - The bot delivered the required MediCall test message.
-    - The call ended after the delivery goal was completed.
-
-Transcript:
-  [00:00:00] BOT:  This is a test call from MediCall,
-  [00:00:00] USER: Hello.
-  [00:00:01] BOT:  a CALL-E hackathon project. test confirmed
-
-Activity timeline:
-  [02:42:04] run_call started.
-  [02:42:08] botlab create bot.
-  [02:42:26] calling resolve robot id.
-  [02:42:28] calling create task.
-  [02:42:30] calling task created.
-  [02:42:30] calling task status=pending
-  [02:42:35] calling task status=calling
-  [02:42:43] Call is ringing.
-  [02:42:53] Call connected.
-  [02:42:55] Bot is speaking: This is a test call from MediCall,
-  [02:42:55] Callee said: hello / Hello.
-  [02:42:56] Bot is speaking: a CALL-E hackathon project. test confirmed
-  [02:43:00] Call ended; syncing final Calling result.
-  [02:43:09] Call ended from realtime events.
-  [02:43:41] calling task status=finished
-```
-
-### Call 2 — NO_ANSWER (`run_id=QI2M34K_ul65bVDaNdOZOw`)
+### Call 1 — COMPLETED (2026-09-08, `test_real_adapter_single_call`)
 
 ```
-Status:       NO_ANSWER
-Call ID:      60d97d0e4edc4bf4909effddd3664e8b
-Duration:     0s
+run_id:    lhMoHsEDfkVGsByuf4Ozpw
+call_id:   704ab18b90b74cbdba3d9b8ab4f8d476
+Status:    COMPLETED
+Duration:  80s
+Phone:     +918160094043
 
-Post Summary:
-  The test call did not connect and the recipient may be unavailable.
+Activity:
+  [03:15:35] run_call started.
+  [03:15:40] botlab create bot.
+  [03:16:06] calling resolve robot id.
+  [03:16:15] Call is ringing.
+  [03:16:30] Call connected.
+  [03:16:31] Bot is speaking: Hi, is this Jane Smith?
+  [03:16:36] Callee said: Hello. yeah you are speaking with Jan.
+  [03:16:40] Bot is speaking: I'm calling from City Medical Centre about your appointment...
+  [03:16:51] Callee said: Yes, I think I am planning to attend.
+  [03:16:56] Bot is speaking: Has anything relevant to your visit changed since you booked?
+  [03:17:17] Callee said: I was feeling a bit out this morning so.
+  [03:17:20] Bot is speaking: Thank you for letting me know. I'll make sure the care team knows.
+  [03:17:49] Bot is speaking: Thank you, bye.
+  [03:18:02] Call ended; syncing final Calling result.
 
-Outcome:
-  task_completed: False
-  evidence:
-    - The call ended with a no-answer status.
-    - No transcript or speech was captured.
-    - The call duration was 0 seconds.
+MediCall result: COMPLETED · appointment_confirmed=False · patient_reports=0
+```
+
+### Call 2 — COMPLETED (2026-09-08, `test_real_full_workflow`)
+
+```
+run_id:    9ynAJpVlts1kZDVBYDV9tA
+Status:    COMPLETED
+Duration:  ~90s
+Phone:     +918160094043
+
+Full engine run:
+  workflow_id:  bcea5a01-9485-406c-b4fe-0cb17c6892cf
+  disposition:  ROUTINE
+  action:       routine_complete
+  events:       AppointmentCreated → CallRequested → CallCompleted →
+                ResultValidated → PolicyEvaluated → WorkflowCompleted
+
+Activity (excerpted):
+  Patient said: No, nothing specific. [re: changes since booking]
+  Patient chose: First one [of two offered reschedule slots]
+  → Bot confirmed and ended call.
+```
+
+### Call 3 — NO_ANSWER (historical)
+
+```
+run_id:    QI2M34K_ul65bVDaNdOZOw
+Status:    NO_ANSWER
+Duration:  0s
 
 MediCall policy engine:
   Disposition: ROUTINE  |  Action: flag_for_manual_followup  (R06_no_answer_max_attempts)
-
-Activity timeline:
-  [02:30:57] run_call started.
-  [02:31:01] botlab create bot.
-  [02:31:21] calling resolve robot id.
-  [02:31:30] calling task status=calling
-  [02:31:40] Call is ringing.
-  [02:32:03] Call ended; syncing final Calling result.
-  [02:32:11] calling task status=NO ANSWER
-  [02:32:32] calling task completed with status=NO ANSWER
+  → Status string "NO ANSWER" (space) correctly normalised to "NO_ANSWER" at parse time.
 ```
 
 ---
@@ -334,18 +330,20 @@ Activity timeline:
 MediCall uses the **`calle` CLI** subprocess path exclusively:
 
 ```
-calle call start --to-phone <E.164> --goal <text> --json
+calle call start --to-phone <E.164> --goal <text> [--language <lang>] [--region <r>] --json
     → {run_id, status_result: {structuredContent: <get_call_run>}}
 
-calle call status --run-id <id> --json
-    → {result: {structuredContent: <get_call_run>}}
+while not terminal:
+    calle call status --run-id <id> --json
+        → {result: {structuredContent: <get_call_run>}}
 ```
 
 - Authentication via existing CLI token cache (`~/.calle-mcp/cli/*/token.json`)
 - Attribution env vars: `CALLE_SOURCE=skills_sh CALLE_INTEGRATION=skills_sh_skill`
 - Status strings normalised at parse time (`"NO ANSWER"` → `"NO_ANSWER"`)
+- Not-reached statuses (`NO_ANSWER`, `VOICEMAIL`, `BUSY`, `EXPIRED`) retry up to `max_retry_attempts`
 - Poll interval: **2s** (`POLL_INTERVAL_SECONDS=2`, `POLL_FIRST_SECONDS=2`)
 - Binary path cached after first resolution — no per-poll filesystem stat
-- Retry logic: configurable `max_retry_attempts` per appointment
 - Language support: `--language Hindi` tested end-to-end with full engine run
-- Rate limiting: timeout message + warning log when `PREPARING` exceeds `CALL_TIMEOUT_SECONDS`
+- `CALLE_CACHE_ROOT` forwarded to subprocess env when set
+- Past-date protection: acceptance test dates computed dynamically at runtime

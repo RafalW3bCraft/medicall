@@ -118,12 +118,19 @@ Two real outbound calls were placed during development and testing:
 
 | Layer | Tests | Notes |
 |---|---|---|
-| Unit | 15 | Policy engine (8 rules), state machine, result validator |
-| Integration | 31 | CoordinationEngine × 10 scenarios, handoffs router × 8 |
-| Acceptance | 2 | Real CALL-E call — `CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043` |
-| Smoke eval | 10 | All recorded scenarios via `python -m eval.run_eval` |
+| Unit | 15 | Policy engine (7 rules), state machine, result validator |
+| Integration | 33 | CoordinationEngine × 12 scenarios (incl. voicemail + Hindi), handoffs router × 8 |
+| Acceptance | 3 | Real CALL-E calls — `CALLE_ACCEPTANCE=1 ACCEPTANCE_PHONE=+918160094043` |
+| Smoke eval | 11 | All recorded scenarios via `python -m eval.run_eval` |
 
-**Total: 46 unit+integration, 10 eval, 2 acceptance — all pass.**
+**Total: 48 unit+integration, 11 eval, 3 acceptance — all pass.**
+
+**Verified live acceptance runs (2026-09-08):**
+
+| Test | run_id | Status | Duration |
+|---|---|---|---|
+| `test_real_adapter_single_call` | `lhMoHsEDfkVGsByuf4Ozpw` | `COMPLETED` | 80s |
+| `test_real_full_workflow` | `9ynAJpVlts1kZDVBYDV9tA` | `COMPLETED` | ~90s |
 
 ### Architecture Highlights
 
@@ -150,7 +157,7 @@ Staff handoff card    (evidence-linked, auditable)
 **Components:**
 - [`real_adapter.py`](medicall/calle/real_adapter.py) — CLI subprocess, polling loop, activity printer, parser
 - [`coordinator.py`](medicall/engine/coordinator.py) — 15-state workflow engine
-- [`policy.py`](medicall/engine/policy.py) — 6-rule deterministic policy engine
+- [`policy.py`](medicall/engine/policy.py) — 7-rule deterministic policy engine
 - [`validator.py`](medicall/engine/validator.py) — transcript + intake semantic boundary
 - [`goal_builder.py`](medicall/healthcare/goal_builder.py) — conversation policy embedded in CALL-E goal text
 - [`handoff.py`](medicall/engine/handoff.py) — evidence-linked staff handoff generator
