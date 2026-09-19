@@ -32,7 +32,7 @@ requiring: outbound call → structured intake → deterministic policy → hand
 
 ## CALL-E Account
 
-**Email:** allzerosinittodaytomastercalle@gmail.com *(CALL-E account email — keep private)*
+**Email:** *(provided separately to organizers)*
 
 ---
 
